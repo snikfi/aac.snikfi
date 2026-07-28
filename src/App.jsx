@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const subjectImages = {
@@ -14,7 +14,10 @@ const subjectImages = {
   anisa: 'http://localhost:3845/assets/7406f35621c6a3d6381286f097f9e9686ad3fb09.png',
 }
 
-const SUBJECTS = [
+const STORAGE_KEY = 'arti-aac-tiles-v1'
+const ADMIN_PIN = '0405'
+
+const DEFAULT_SUBJECTS = [
   { id: 'terry', label: 'Terry', image: subjectImages.terry },
   { id: 'dan-1', label: 'Dan', image: subjectImages.dan },
   { id: 'tom', label: 'Tom', image: subjectImages.tom },
@@ -29,7 +32,7 @@ const SUBJECTS = [
   { id: 'vipul-2', label: 'Vipul', image: subjectImages.vipul },
 ]
 
-const VERBS = [
+const DEFAULT_VERBS = [
   {
     id: 'food',
     label: 'food',
@@ -101,7 +104,7 @@ function makeBadgeImage(label, backgroundColor, foregroundColor = '#060606') {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
 }
 
-const OBJECTS_BY_VERB = {
+const DEFAULT_OBJECTS_BY_VERB = {
   'i-want': [
     { id: 'toilet', label: 'Toilet', spoken: 'to go to the toilet', image: makeBadgeImage('Toilet', '#d9f2ff') },
     { id: 'drink', label: 'Drink', spoken: 'a drink', image: makeBadgeImage('Drink', '#dff3d2') },
@@ -156,13 +159,86 @@ const OBJECTS_BY_VERB = {
   ],
 }
 
+function cloneDefaults() {
+  return {
+    subjects: structuredClone(DEFAULT_SUBJECTS),
+    verbs: structuredClone(DEFAULT_VERBS),
+    objectsByVerb: structuredClone(DEFAULT_OBJECTS_BY_VERB),
+  }
+}
+
+function loadTileConfig() {
+  const defaults = cloneDefaults()
+
+  if (typeof window === 'undefined') {
+    return defaults
+  }
+
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY)
+    if (!stored) {
+      return defaults
+    }
+
+    const parsed = JSON.parse(stored)
+    if (!Array.isArray(parsed.subjects) || !Array.isArray(parsed.verbs) || !parsed.objectsByVerb) {
+      return defaults
+    }
+
+    return {
+      subjects: parsed.subjects,
+      verbs: parsed.verbs,
+      objectsByVerb: parsed.objectsByVerb,
+    }
+  } catch {
+    return defaults
+  }
+}
+
+function toTileId(label) {
+  const base = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+
+  return `${base || 'tile'}-${Date.now()}`
+}
+
+function moveItem(list, index, direction) {
+  const next = [...list]
+  const target = index + direction
+
+  if (target < 0 || target >= next.length) {
+    return next
+  }
+
+  const [item] = next.splice(index, 1)
+  next.splice(target, 0, item)
+  return next
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 function speakText(text) {
   if (!text || typeof window === 'undefined' || !window.speechSynthesis) {
     return
   }
 
+  const trimmedText = text.trim()
+  const normalizedText = /^[A-Za-z]$/.test(trimmedText)
+    ? trimmedText.toLowerCase()
+    : text
+
   window.speechSynthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(text)
+  const utterance = new SpeechSynthesisUtterance(normalizedText)
   utterance.rate = 0.9
   utterance.pitch = 1
   window.speechSynthesis.speak(utterance)
@@ -183,18 +259,137 @@ function enhanceSentence(subject, verb, objectWord) {
 }
 
 function App() {
+  const initialConfig = useMemo(() => loadTileConfig(), [])
+
+  const [subjects, setSubjects] = useState(initialConfig.subjects)
+  const [verbs, setVerbs] = useState(initialConfig.verbs)
+  const [objectsByVerb, setObjectsByVerb] = useState(initialConfig.objectsByVerb)
+
   const [subject, setSubject] = useState(null)
   const [verb, setVerb] = useState(null)
   const [objectWord, setObjectWord] = useState(null)
   const [lastSpoken, setLastSpoken] = useState('')
+
+  const [isPinOpen, setIsPinOpen] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [isAdminOpen, setIsAdminOpen] = useState(false)
+  const [adminTab, setAdminTab] = useState('subject')
+
+  const [objectVerbId, setObjectVerbId] = useState(verbs[0]?.id || '')
+  const [newTileName, setNewTileName] = useState('')
+  const [newTileImage, setNewTileImage] = useState('')
+  const [lastDeleted, setLastDeleted] = useState(null)
+  const [dragState, setDragState] = useState({
+    active: false,
+    scope: '',
+    fromIndex: -1,
+    overIndex: -1,
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const payload = JSON.stringify({ subjects, verbs, objectsByVerb })
+    window.localStorage.setItem(STORAGE_KEY, payload)
+  }, [subjects, verbs, objectsByVerb])
+
+  useEffect(() => {
+    if (verb && !verbs.some((item) => item.id === verb.id)) {
+      setVerb(null)
+      setObjectWord(null)
+    }
+  }, [verb, verbs])
+
+  useEffect(() => {
+    if (subject && !subjects.some((item) => item.id === subject.id)) {
+      setSubject(null)
+      setVerb(null)
+      setObjectWord(null)
+    }
+  }, [subject, subjects])
+
+  useEffect(() => {
+    if (!verbs.length) {
+      setObjectVerbId('')
+      return
+    }
+
+    if (!objectVerbId || !verbs.some((item) => item.id === objectVerbId)) {
+      setObjectVerbId(verbs[0].id)
+    }
+  }, [verbs, objectVerbId])
+
+  useEffect(() => {
+    if (!dragState.active) {
+      return undefined
+    }
+
+    const onPointerMove = (event) => {
+      const element = document.elementFromPoint(event.clientX, event.clientY)
+      const item = element?.closest('[data-admin-item-index]')
+
+      if (!item) {
+        return
+      }
+
+      const targetIndex = Number(item.getAttribute('data-admin-item-index'))
+      if (Number.isNaN(targetIndex)) {
+        return
+      }
+
+      setDragState((current) =>
+        current.overIndex === targetIndex ? current : { ...current, overIndex: targetIndex },
+      )
+    }
+
+    const onPointerEnd = () => {
+      setDragState((current) => {
+        if (!current.active) {
+          return current
+        }
+
+        if (
+          current.scope &&
+          current.fromIndex >= 0 &&
+          current.overIndex >= 0 &&
+          current.fromIndex !== current.overIndex
+        ) {
+          onMoveTileToIndex(current.scope, current.fromIndex, current.overIndex)
+        }
+
+        return { active: false, scope: '', fromIndex: -1, overIndex: -1 }
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerEnd)
+    window.addEventListener('pointercancel', onPointerEnd)
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerEnd)
+      window.removeEventListener('pointercancel', onPointerEnd)
+    }
+  }, [dragState.active])
 
   const objectOptions = useMemo(() => {
     if (!verb) {
       return []
     }
 
-    return OBJECTS_BY_VERB[verb.id] || []
-  }, [verb])
+    return objectsByVerb[verb.id] || []
+  }, [verb, objectsByVerb])
+
+  const adminObjectTiles = useMemo(() => {
+    if (!objectVerbId) {
+      return []
+    }
+
+    return objectsByVerb[objectVerbId] || []
+  }, [objectsByVerb, objectVerbId])
 
   const sentencePreview = useMemo(() => {
     return [subject?.label, verb?.label, objectWord?.label]
@@ -233,6 +428,248 @@ function App() {
     speakText(item.label)
     setLastSpoken(item.label)
   }
+
+  const onOpenPin = () => {
+    setPinInput('')
+    setPinError('')
+    setIsPinOpen(true)
+  }
+
+  const onSubmitPin = () => {
+    if (pinInput === ADMIN_PIN) {
+      setIsPinOpen(false)
+      setIsAdminOpen(true)
+      setPinError('')
+      return
+    }
+
+    setPinError('Incorrect code')
+  }
+
+  const onCloseAdmin = () => {
+    setIsAdminOpen(false)
+    setAdminTab('subject')
+    setLastDeleted(null)
+  }
+
+  const createNewTile = (label, image) => {
+    return {
+      id: toTileId(label),
+      label,
+      image: image || makeBadgeImage(label, '#fafdd9'),
+    }
+  }
+
+  const onAddTile = () => {
+    const label = newTileName.trim()
+    if (!label) {
+      return
+    }
+
+    const tile = createNewTile(label, newTileImage.trim())
+
+    if (adminTab === 'subject') {
+      setSubjects((current) => [...current, tile])
+    } else if (adminTab === 'verb') {
+      setVerbs((current) => [...current, tile])
+      setObjectsByVerb((current) => ({ ...current, [tile.id]: [] }))
+      if (!objectVerbId) {
+        setObjectVerbId(tile.id)
+      }
+    } else if (adminTab === 'object' && objectVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [objectVerbId]: [...(current[objectVerbId] || []), tile],
+      }))
+    }
+
+    setNewTileName('')
+    setNewTileImage('')
+  }
+
+  const onEditTile = (scope, id, field, value) => {
+    if (scope === 'subject') {
+      setSubjects((current) =>
+        current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+      )
+      return
+    }
+
+    if (scope === 'verb') {
+      setVerbs((current) =>
+        current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+      )
+      return
+    }
+
+    if (scope === 'object' && objectVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [objectVerbId]: (current[objectVerbId] || []).map((item) =>
+          item.id === id ? { ...item, [field]: value } : item,
+        ),
+      }))
+    }
+  }
+
+  const onReorderTile = (scope, index, direction) => {
+    if (scope === 'subject') {
+      setSubjects((current) => moveItem(current, index, direction))
+      return
+    }
+
+    if (scope === 'verb') {
+      setVerbs((current) => moveItem(current, index, direction))
+      return
+    }
+
+    if (scope === 'object' && objectVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [objectVerbId]: moveItem(current[objectVerbId] || [], index, direction),
+      }))
+    }
+  }
+
+  const onMoveTileToIndex = (scope, fromIndex, toIndex) => {
+    const moveTo = (list) => {
+      const next = [...list]
+      const [tile] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, tile)
+      return next
+    }
+
+    if (scope === 'subject') {
+      setSubjects((current) => moveTo(current))
+      return
+    }
+
+    if (scope === 'verb') {
+      setVerbs((current) => moveTo(current))
+      return
+    }
+
+    if (scope === 'object' && objectVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [objectVerbId]: moveTo(current[objectVerbId] || []),
+      }))
+    }
+  }
+
+  const onStartDragTile = (scope, index, event) => {
+    event.preventDefault()
+    setDragState({ active: true, scope, fromIndex: index, overIndex: index })
+  }
+
+  const onDeleteTile = (scope, tile, index) => {
+    const confirmed = window.confirm(`Delete \"${tile.label}\" from ${scope} tiles?`)
+    if (!confirmed) {
+      return
+    }
+
+    if (scope === 'subject') {
+      setLastDeleted({ scope, tile, index })
+      setSubjects((current) => current.filter((item) => item.id !== tile.id))
+      return
+    }
+
+    if (scope === 'verb') {
+      setLastDeleted({
+        scope,
+        tile,
+        index,
+        objectsForVerb: structuredClone(objectsByVerb[tile.id] || []),
+      })
+      setVerbs((current) => current.filter((item) => item.id !== tile.id))
+      setObjectsByVerb((current) => {
+        const next = { ...current }
+        delete next[tile.id]
+        return next
+      })
+      return
+    }
+
+    if (scope === 'object' && objectVerbId) {
+      setLastDeleted({ scope, tile, index, objectVerbId })
+      setObjectsByVerb((current) => ({
+        ...current,
+        [objectVerbId]: (current[objectVerbId] || []).filter((item) => item.id !== tile.id),
+      }))
+    }
+  }
+
+  const onUndoDelete = () => {
+    if (!lastDeleted) {
+      return
+    }
+
+    const insertAt = (list, restoredTile, restoredIndex) => {
+      const next = [...list]
+      const safeIndex = Math.max(0, Math.min(restoredIndex, next.length))
+      next.splice(safeIndex, 0, restoredTile)
+      return next
+    }
+
+    if (lastDeleted.scope === 'subject') {
+      setSubjects((current) => insertAt(current, lastDeleted.tile, lastDeleted.index))
+      setLastDeleted(null)
+      return
+    }
+
+    if (lastDeleted.scope === 'verb') {
+      setVerbs((current) => insertAt(current, lastDeleted.tile, lastDeleted.index))
+      setObjectsByVerb((current) => ({
+        ...current,
+        [lastDeleted.tile.id]: structuredClone(lastDeleted.objectsForVerb || []),
+      }))
+      setLastDeleted(null)
+      return
+    }
+
+    if (lastDeleted.scope === 'object' && lastDeleted.objectVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [lastDeleted.objectVerbId]: insertAt(
+          current[lastDeleted.objectVerbId] || [],
+          lastDeleted.tile,
+          lastDeleted.index,
+        ),
+      }))
+      setLastDeleted(null)
+    }
+  }
+
+  const onUploadTileImage = async (scope, id, file) => {
+    if (!file) {
+      return
+    }
+
+    try {
+      const image = await readFileAsDataUrl(file)
+      onEditTile(scope, id, 'image', image)
+    } catch {
+      // Ignore read errors so the UI remains responsive for the user.
+    }
+  }
+
+  const onUploadNewTileImage = async (file) => {
+    if (!file) {
+      return
+    }
+
+    try {
+      const image = await readFileAsDataUrl(file)
+      setNewTileImage(image)
+    } catch {
+      // Ignore read errors so the UI remains responsive for the user.
+    }
+  }
+
+  const adminTiles =
+    adminTab === 'subject' ? subjects : adminTab === 'verb' ? verbs : adminObjectTiles
+
+  const mobileStepClass = !subject ? 'step-subject' : !verb ? 'step-verb' : 'step-object'
 
   const onSelectVerb = (item) => {
     setVerb(item)
@@ -277,23 +714,53 @@ function App() {
     speakText(lastSpoken || sentence || fallback)
   }
 
+  const onBackspace = () => {
+    if (objectWord) {
+      setObjectWord(null)
+      return
+    }
+
+    if (verb) {
+      setVerb(null)
+      setObjectWord(null)
+      return
+    }
+
+    if (subject) {
+      setSubject(null)
+      setVerb(null)
+      setObjectWord(null)
+    }
+  }
+
   return (
     <main className="figma-shell" data-node-id="1:59">
       <header className="top-strip">
-        <div className="top-left">
-          {topSelections.map((item) => (
-            <div
-              key={item.id}
-              className={`top-selection-chip ${item.image ? `filled tone-${item.tone}` : 'empty'}`}
-              aria-label={`${item.id} selection: ${item.label}`}
-            >
-              {item.image ? (
-                <img src={item.image} alt="" aria-hidden="true" loading="lazy" />
-              ) : (
-                <div className="chip-placeholder" aria-hidden="true" />
-              )}
-            </div>
-          ))}
+        <div className="top-left-group">
+          <div className="top-left">
+            {topSelections.map((item) => (
+              <div
+                key={item.id}
+                className={`top-selection-chip ${item.image ? `filled tone-${item.tone}` : 'empty'}`}
+                aria-label={`${item.id} selection: ${item.label}`}
+              >
+                {item.image ? (
+                  <img src={item.image} alt="" aria-hidden="true" loading="lazy" />
+                ) : (
+                  <div className="chip-placeholder" aria-hidden="true" />
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="top-backspace"
+            onClick={onBackspace}
+            aria-label="Backspace one step"
+            disabled={!subject && !verb && !objectWord}
+          >
+            <span className="backspace-icon">⌫</span>
+          </button>
         </div>
         <div className="top-controls">
           <button type="button" className="control-btn" onClick={onRepeat}>
@@ -307,7 +774,7 @@ function App() {
         </div>
       </header>
 
-      <section className="board-layout" aria-label="AAC communication grid">
+      <section className={`board-layout ${mobileStepClass}`} aria-label="AAC communication grid">
         <aside className="side-rail" aria-label="quick words">
           {QUICK_WORDS.map((item) => (
             <button
@@ -320,14 +787,19 @@ function App() {
               <span>{item.label}</span>
             </button>
           ))}
-          <button type="button" className="lock-tile" aria-label="Locked area">
+          <button
+            type="button"
+            className="lock-tile"
+            aria-label="Admin panel"
+            onClick={onOpenPin}
+          >
             🔒
           </button>
         </aside>
 
         <article className="subject-panel">
           <div className="subject-grid">
-            {SUBJECTS.map((item) => (
+            {subjects.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -344,7 +816,7 @@ function App() {
         <article className={`verb-column ${subject ? 'active' : 'empty'}`} aria-label="Verb column">
           {subject && (
             <div className="verb-grid">
-              {VERBS.map((item) => (
+              {verbs.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -377,6 +849,191 @@ function App() {
           )}
         </article>
       </section>
+
+      {isPinOpen && (
+        <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Admin code">
+          <div className="admin-pin-card">
+            <h2>Enter admin code</h2>
+            <input
+              type="password"
+              value={pinInput}
+              onChange={(event) => setPinInput(event.target.value)}
+              placeholder="Code"
+              maxLength={8}
+            />
+            {pinError && <p className="admin-error">{pinError}</p>}
+            <div className="admin-pin-actions">
+              <button type="button" className="admin-btn" onClick={onSubmitPin}>
+                Unlock
+              </button>
+              <button type="button" className="admin-btn ghost" onClick={() => setIsPinOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAdminOpen && (
+        <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Tile admin">
+          <section className="admin-panel">
+            <header className="admin-header">
+              <h2>Tile Admin</h2>
+              <button type="button" className="admin-btn ghost" onClick={onCloseAdmin}>
+                Close
+              </button>
+            </header>
+
+            <div className="admin-tabs">
+              <button
+                type="button"
+                className={`admin-tab ${adminTab === 'subject' ? 'active' : ''}`}
+                onClick={() => setAdminTab('subject')}
+              >
+                Subject
+              </button>
+              <button
+                type="button"
+                className={`admin-tab ${adminTab === 'verb' ? 'active' : ''}`}
+                onClick={() => setAdminTab('verb')}
+              >
+                Verb
+              </button>
+              <button
+                type="button"
+                className={`admin-tab ${adminTab === 'object' ? 'active' : ''}`}
+                onClick={() => setAdminTab('object')}
+              >
+                Object
+              </button>
+            </div>
+
+            {adminTab === 'object' && (
+              <label className="admin-row">
+                <span>Object set for verb</span>
+                <select
+                  value={objectVerbId}
+                  onChange={(event) => setObjectVerbId(event.target.value)}
+                >
+                  {verbs.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <div className="admin-create">
+              <input
+                type="text"
+                value={newTileName}
+                onChange={(event) => setNewTileName(event.target.value)}
+                placeholder="Tile name"
+              />
+              <input
+                type="text"
+                value={newTileImage}
+                onChange={(event) => setNewTileImage(event.target.value)}
+                placeholder="Image URL (optional)"
+              />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
+              />
+              <button type="button" className="admin-btn" onClick={onAddTile}>
+                Add tile
+              </button>
+            </div>
+
+            {lastDeleted && (
+              <div className="admin-undo-row" role="status" aria-live="polite">
+                <span>
+                  Deleted &quot;{lastDeleted.tile.label}&quot;.
+                </span>
+                <button type="button" className="admin-btn ghost" onClick={onUndoDelete}>
+                  Undo
+                </button>
+              </div>
+            )}
+
+            <div className="admin-list">
+              {adminTiles.map((item, index) => (
+                <article
+                  key={item.id}
+                  className={`admin-item ${
+                    dragState.active && dragState.fromIndex === index && dragState.scope === adminTab
+                      ? 'dragging'
+                      : ''
+                  } ${
+                    dragState.active && dragState.overIndex === index && dragState.scope === adminTab
+                      ? 'drop-target'
+                      : ''
+                  }`}
+                  data-admin-item-index={index}
+                >
+                  <img src={item.image} alt="" aria-hidden="true" />
+                  <div className="admin-item-fields">
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(event) =>
+                        onEditTile(adminTab, item.id, 'label', event.target.value)
+                      }
+                    />
+                    <input
+                      type="text"
+                      value={item.image}
+                      onChange={(event) =>
+                        onEditTile(adminTab, item.id, 'image', event.target.value)
+                      }
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) =>
+                        onUploadTileImage(adminTab, item.id, event.target.files?.[0])
+                      }
+                    />
+                  </div>
+                  <div className="admin-item-actions">
+                    <button
+                      type="button"
+                      className="admin-btn ghost admin-drag-handle"
+                      onPointerDown={(event) => onStartDragTile(adminTab, index, event)}
+                      aria-label={`Drag to reorder ${item.label}`}
+                    >
+                      Drag
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn ghost"
+                      onClick={() => onReorderTile(adminTab, index, -1)}
+                    >
+                      Up
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn ghost"
+                      onClick={() => onReorderTile(adminTab, index, 1)}
+                    >
+                      Down
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn danger"
+                      onClick={() => onDeleteTile(adminTab, item, index)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
     </main>
   )
