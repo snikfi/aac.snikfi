@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@400;700&display=swap');
+
+:root {
+  font-family: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
+  color: #111218;
+  background-color: #1f1f1f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  height: 100dvh;
+  background: #1f1f1f;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+h1,
+h2,
+h3,
+button {
+  font-family: 'Lato', 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
+}
