@@ -216,7 +216,7 @@ function App() {
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [restoreDraft, setRestoreDraft] = useState(null)
-  const [lastDeleted, setLastDeleted] = useState(null)
+  const [deletedToasts, setDeletedToasts] = useState([])
   const [dragState, setDragState] = useState({
     active: false,
     scope: '',
@@ -543,7 +543,14 @@ function App() {
   const onCloseAdmin = () => {
     setIsAdminOpen(false)
     setAdminTab('subject')
-    setLastDeleted(null)
+    setDeletedToasts([])
+  }
+
+  const createDeletedToast = (payload) => {
+    return {
+      undoId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ...payload,
+    }
   }
 
   const createNewTile = (label, image) => {
@@ -663,18 +670,21 @@ function App() {
     }
 
     if (scope === 'subject') {
-      setLastDeleted({ scope, tile, index })
+      setDeletedToasts((current) => [...current, createDeletedToast({ scope, tile, index })])
       setSubjects((current) => current.filter((item) => item.id !== tile.id))
       return
     }
 
     if (scope === 'verb') {
-      setLastDeleted({
-        scope,
-        tile,
-        index,
-        objectsForVerb: structuredClone(objectsByVerb[tile.id] || []),
-      })
+      setDeletedToasts((current) => [
+        ...current,
+        createDeletedToast({
+          scope,
+          tile,
+          index,
+          objectsForVerb: structuredClone(objectsByVerb[tile.id] || []),
+        }),
+      ])
       setVerbs((current) => current.filter((item) => item.id !== tile.id))
       setObjectsByVerb((current) => {
         const next = { ...current }
@@ -685,7 +695,10 @@ function App() {
     }
 
     if (scope === 'object' && objectVerbId) {
-      setLastDeleted({ scope, tile, index, objectVerbId })
+      setDeletedToasts((current) => [
+        ...current,
+        createDeletedToast({ scope, tile, index, objectVerbId }),
+      ])
       setObjectsByVerb((current) => ({
         ...current,
         [objectVerbId]: (current[objectVerbId] || []).filter((item) => item.id !== tile.id),
@@ -735,8 +748,10 @@ function App() {
     }
   }
 
-  const onUndoDelete = () => {
-    if (!lastDeleted) {
+  const onUndoDelete = (undoId) => {
+    const deletedItem = deletedToasts.find((toast) => toast.undoId === undoId)
+
+    if (!deletedItem) {
       return
     }
 
@@ -747,32 +762,32 @@ function App() {
       return next
     }
 
-    if (lastDeleted.scope === 'subject') {
-      setSubjects((current) => insertAt(current, lastDeleted.tile, lastDeleted.index))
-      setLastDeleted(null)
+    if (deletedItem.scope === 'subject') {
+      setSubjects((current) => insertAt(current, deletedItem.tile, deletedItem.index))
+      setDeletedToasts((current) => current.filter((toast) => toast.undoId !== undoId))
       return
     }
 
-    if (lastDeleted.scope === 'verb') {
-      setVerbs((current) => insertAt(current, lastDeleted.tile, lastDeleted.index))
+    if (deletedItem.scope === 'verb') {
+      setVerbs((current) => insertAt(current, deletedItem.tile, deletedItem.index))
       setObjectsByVerb((current) => ({
         ...current,
-        [lastDeleted.tile.id]: structuredClone(lastDeleted.objectsForVerb || []),
+        [deletedItem.tile.id]: structuredClone(deletedItem.objectsForVerb || []),
       }))
-      setLastDeleted(null)
+      setDeletedToasts((current) => current.filter((toast) => toast.undoId !== undoId))
       return
     }
 
-    if (lastDeleted.scope === 'object' && lastDeleted.objectVerbId) {
+    if (deletedItem.scope === 'object' && deletedItem.objectVerbId) {
       setObjectsByVerb((current) => ({
         ...current,
-        [lastDeleted.objectVerbId]: insertAt(
-          current[lastDeleted.objectVerbId] || [],
-          lastDeleted.tile,
-          lastDeleted.index,
+        [deletedItem.objectVerbId]: insertAt(
+          current[deletedItem.objectVerbId] || [],
+          deletedItem.tile,
+          deletedItem.index,
         ),
       }))
-      setLastDeleted(null)
+      setDeletedToasts((current) => current.filter((toast) => toast.undoId !== undoId))
     }
   }
 
@@ -1209,17 +1224,6 @@ function App() {
               </button>
             </div>
 
-            {lastDeleted && (
-              <div className="admin-undo-row" role="status" aria-live="polite">
-                <span>
-                  Deleted &quot;{lastDeleted.tile.label}&quot;.
-                </span>
-                <button type="button" className="admin-btn ghost" onClick={onUndoDelete}>
-                  Undo
-                </button>
-              </div>
-            )}
-
             <div className="admin-list">
               {adminTiles.map((item, index) => (
                 <article
@@ -1311,6 +1315,25 @@ function App() {
               ))}
             </div>
           </section>
+
+          {deletedToasts.length > 0 && (
+            <div className="admin-undo-toast-stack" aria-live="polite">
+              {deletedToasts.map((toast) => (
+                <div key={toast.undoId} className="admin-undo-toast" role="status">
+                  <span>
+                    Deleted &quot;{toast.tile.label}&quot;.
+                  </span>
+                  <button
+                    type="button"
+                    className="admin-btn ghost"
+                    onClick={() => onUndoDelete(toast.undoId)}
+                  >
+                    Undo
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
