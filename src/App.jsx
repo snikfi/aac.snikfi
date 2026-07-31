@@ -1394,13 +1394,31 @@ function App() {
 
           {exportNotice && (
             <>
-              <div className="admin-delete-backdrop" onClick={onCloseExportNotice} aria-hidden="true" />
-              <div className="admin-delete-modal" role="dialog" aria-modal="true" aria-label="Backup exported">
+              <div
+                className="admin-delete-backdrop"
+                onClick={onCloseExportNotice}
+                aria-hidden="true"
+                style={{ position: 'fixed', inset: 0, zIndex: 74, background: 'rgb(7 8 12 / 0.48)' }}
+              />
+              <div
+                className="admin-delete-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Backup exported"
+                style={{
+                  position: 'fixed',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 75,
+                  width: 'min(380px, calc(100vw - 24px))',
+                }}
+              >
                 <h3>{exportNotice.title}</h3>
                 <p>
                   <strong>{exportNotice.message}</strong>
                 </p>
-                <div className="admin-delete-actions">
+                <div className="admin-delete-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                   <button type="button" className="admin-btn" onClick={onCloseExportNotice}>
                     Close
                   </button>
