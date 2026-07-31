@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  fetchRemoteTileConfig,
+  isRemoteSyncEnabled,
+  saveRemoteTileConfig,
+} from './lib/tileConfigSync'
 import './App.css'
 
 const subjectImages = {
@@ -167,6 +172,22 @@ function cloneDefaults() {
   }
 }
 
+function isValidTileConfig(config) {
+  if (!config || typeof config !== 'object') {
+    return false
+  }
+
+  if (!Array.isArray(config.subjects) || !Array.isArray(config.verbs)) {
+    return false
+  }
+
+  if (!config.objectsByVerb || typeof config.objectsByVerb !== 'object') {
+    return false
+  }
+
+  return true
+}
+
 function loadTileConfig() {
   const defaults = cloneDefaults()
 
@@ -181,7 +202,7 @@ function loadTileConfig() {
     }
 
     const parsed = JSON.parse(stored)
-    if (!Array.isArray(parsed.subjects) || !Array.isArray(parsed.verbs) || !parsed.objectsByVerb) {
+    if (!isValidTileConfig(parsed)) {
       return defaults
     }
 
@@ -279,6 +300,10 @@ function App() {
   const [objectVerbId, setObjectVerbId] = useState(verbs[0]?.id || '')
   const [newTileName, setNewTileName] = useState('')
   const [newTileImage, setNewTileImage] = useState('')
+  const [syncState, setSyncState] = useState(
+    isRemoteSyncEnabled() ? 'connecting' : 'local-only',
+  )
+  const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [lastDeleted, setLastDeleted] = useState(null)
   const [dragState, setDragState] = useState({
     active: false,
@@ -295,6 +320,70 @@ function App() {
     const payload = JSON.stringify({ subjects, verbs, objectsByVerb })
     window.localStorage.setItem(STORAGE_KEY, payload)
   }, [subjects, verbs, objectsByVerb])
+
+  useEffect(() => {
+    let isCanceled = false
+
+    const syncFromRemote = async () => {
+      if (!isRemoteSyncEnabled()) {
+        setHasHydratedSync(true)
+        return
+      }
+
+      try {
+        const remoteConfig = await fetchRemoteTileConfig()
+
+        if (isCanceled) {
+          return
+        }
+
+        if (isValidTileConfig(remoteConfig)) {
+          setSubjects(remoteConfig.subjects)
+          setVerbs(remoteConfig.verbs)
+          setObjectsByVerb(remoteConfig.objectsByVerb)
+        }
+
+        setSyncState('synced')
+      } catch {
+        if (!isCanceled) {
+          setSyncState('error')
+        }
+      } finally {
+        if (!isCanceled) {
+          setHasHydratedSync(true)
+        }
+      }
+    }
+
+    syncFromRemote()
+
+    return () => {
+      isCanceled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hasHydratedSync || !isRemoteSyncEnabled()) {
+      return
+    }
+
+    const payload = { subjects, verbs, objectsByVerb }
+    setSyncState('saving')
+
+    const timeoutId = window.setTimeout(() => {
+      saveRemoteTileConfig(payload)
+        .then(() => {
+          setSyncState('synced')
+        })
+        .catch(() => {
+          setSyncState('error')
+        })
+    }, 500)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [subjects, verbs, objectsByVerb, hasHydratedSync])
 
   useEffect(() => {
     if (verb && !verbs.some((item) => item.id === verb.id)) {
@@ -396,6 +485,26 @@ function App() {
       .filter(Boolean)
       .join('  •  ')
   }, [subject, verb, objectWord])
+
+  const syncMessage = useMemo(() => {
+    if (syncState === 'local-only') {
+      return 'Saved on this device'
+    }
+
+    if (syncState === 'connecting') {
+      return 'Connecting...'
+    }
+
+    if (syncState === 'saving') {
+      return 'Saving...'
+    }
+
+    if (syncState === 'synced') {
+      return 'Saved for all devices'
+    }
+
+    return 'Cloud sync unavailable'
+  }, [syncState])
 
   const topSelections = useMemo(
     () => [
@@ -763,6 +872,9 @@ function App() {
           </button>
         </div>
         <div className="top-controls">
+          <p className={`sync-chip state-${syncState}`} aria-live="polite">
+            {syncMessage}
+          </p>
           <button type="button" className="control-btn" onClick={onRepeat}>
             <span className="control-icon">🔊</span>
             <span>Play</span>

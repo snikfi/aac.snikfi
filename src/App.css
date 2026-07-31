@@ -116,6 +116,40 @@
 .top-controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.sync-chip {
+  margin: 0;
+  min-width: 150px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  border: 1px solid #d3d6de;
+  background: #f5f7fc;
+  color: #17223c;
+}
+
+.sync-chip.state-synced,
+.sync-chip.state-local-only {
+  border-color: #b8d9bf;
+  background: #eaf8ec;
+  color: #1b4a25;
+}
+
+.sync-chip.state-saving,
+.sync-chip.state-connecting {
+  border-color: #c9d6f2;
+  background: #edf3ff;
+  color: #203964;
+}
+
+.sync-chip.state-error {
+  border-color: #efc4c4;
+  background: #fff1f1;
+  color: #7d1d1d;
 }
 
 .control-btn {
@@ -601,6 +635,11 @@ button:focus-visible {
   .control-btn {
     width: 64px;
     height: 64px;
+  }
+
+  .sync-chip {
+    min-width: 0;
+    flex: 1;
   }
 
   .side-tile,
