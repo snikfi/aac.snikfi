@@ -193,6 +193,13 @@
   gap: 8px;
 }
 
+.side-rail-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .side-tile,
 .lock-tile {
   border: 1px solid #e6e6e6;
@@ -217,11 +224,58 @@
 }
 
 .lock-tile {
-  margin-top: auto;
   background: #393939;
   color: #ffffff;
   border-color: #393939;
   font-size: 20px;
+}
+
+.sync-rail-btn {
+  position: relative;
+  border: 1px solid #dceec7;
+  border-radius: 16px;
+  min-height: 64px;
+  background: #d7f6ce;
+  color: #114a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sync-rail-btn.tone-error {
+  border-color: #f2b9b9;
+  background: #ffdede;
+  color: #7a1515;
+}
+
+.sync-rail-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.sync-rail-tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #161820;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+  z-index: 5;
+}
+
+.sync-rail-btn:hover .sync-rail-tooltip,
+.sync-rail-btn:focus-visible .sync-rail-tooltip,
+.sync-rail-btn.open .sync-rail-tooltip {
+  opacity: 1;
 }
 
 .admin-overlay {
@@ -641,6 +695,23 @@ button:focus-visible {
     overflow-x: auto;
     align-self: start;
     height: fit-content;
+  }
+
+  .side-rail-bottom {
+    margin-top: 0;
+    margin-left: auto;
+    flex-direction: row;
+  }
+
+  .sync-rail-tooltip {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    top: auto;
+    transform: translateX(-50%);
+    max-width: min(88vw, 320px);
+    white-space: normal;
+    text-align: center;
   }
 
   .admin-create {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchRemoteTileConfig,
   isRemoteSyncEnabled,
@@ -210,6 +210,8 @@ function App() {
   const [syncState, setSyncState] = useState(
     isRemoteSyncEnabled() ? 'connecting' : 'local-only',
   )
+  const [isSyncTipOpen, setIsSyncTipOpen] = useState(false)
+  const syncTipRef = useRef(null)
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [restoreDraft, setRestoreDraft] = useState(null)
@@ -293,6 +295,37 @@ function App() {
       window.clearTimeout(timeoutId)
     }
   }, [subjects, verbs, objectsByVerb, hasHydratedSync])
+
+  useEffect(() => {
+    if (!isSyncTipOpen) {
+      return undefined
+    }
+
+    const onPointerDown = (event) => {
+      const root = syncTipRef.current
+      if (!root) {
+        return
+      }
+
+      if (!root.contains(event.target)) {
+        setIsSyncTipOpen(false)
+      }
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsSyncTipOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isSyncTipOpen])
 
   useEffect(() => {
     if (verb && !verbs.some((item) => item.id === verb.id)) {
@@ -418,6 +451,10 @@ function App() {
     }
 
     return 'Cloud sync unavailable'
+  }, [syncState])
+
+  const syncTone = useMemo(() => {
+    return syncState === 'error' || syncState === 'local-only' ? 'error' : 'ok'
   }, [syncState])
 
   const topSelections = useMemo(
@@ -851,9 +888,6 @@ function App() {
           </button>
         </div>
         <div className="top-controls">
-          <p className={`sync-chip state-${syncState}`} aria-live="polite">
-            {syncMessage}
-          </p>
           <button type="button" className="control-btn" onClick={onRepeat}>
             <span className="control-icon">🔊</span>
             <span>Play</span>
@@ -878,14 +912,32 @@ function App() {
               <span>{item.label}</span>
             </button>
           ))}
-          <button
-            type="button"
-            className="lock-tile"
-            aria-label="Admin panel"
-            onClick={onOpenPin}
-          >
-            🔒
-          </button>
+          <div className="side-rail-bottom">
+            <button
+              ref={syncTipRef}
+              type="button"
+              className={`sync-rail-btn tone-${syncTone} ${isSyncTipOpen ? 'open' : ''}`}
+              aria-label={syncMessage}
+              aria-live="polite"
+              aria-expanded={isSyncTipOpen}
+              onClick={() => setIsSyncTipOpen((current) => !current)}
+            >
+              <span className="sync-rail-icon" aria-hidden="true">
+                {syncTone === 'ok' ? '☁︎' : '⚠'}
+              </span>
+              <span className="sync-rail-tooltip" role="status">
+                {syncMessage}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="lock-tile"
+              aria-label="Admin panel"
+              onClick={onOpenPin}
+            >
+              🔒
+            </button>
+          </div>
         </aside>
 
         <article className="subject-panel">
