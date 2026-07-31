@@ -169,6 +169,23 @@ function enhanceSentence(subject, verb, objectWord) {
   return `${subject.label} ${verb.label.toLowerCase()} ${spokenObject}.`
 }
 
+function formatBackupTimestamp() {
+  const now = new Date()
+  const pad = (value) => String(value).padStart(2, '0')
+
+  return [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+  ].join('-') +
+    '_' +
+    [
+      pad(now.getHours()),
+      pad(now.getMinutes()),
+      pad(now.getSeconds()),
+    ].join('-')
+}
+
 function App() {
   const initialConfig = useMemo(() => loadTileConfig(), [])
 
@@ -195,6 +212,7 @@ function App() {
   )
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
+  const [restoreDraft, setRestoreDraft] = useState(null)
   const [lastDeleted, setLastDeleted] = useState(null)
   const [dragState, setDragState] = useState({
     active: false,
@@ -676,7 +694,7 @@ function App() {
       return
     }
 
-    const timestamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
+    const timestamp = formatBackupTimestamp()
     const content = JSON.stringify(tileConfig, null, 2)
     const blob = new Blob([content], { type: 'application/json' })
     const objectUrl = window.URL.createObjectURL(blob)
@@ -705,17 +723,35 @@ function App() {
         return
       }
 
-      setSubjects(parsed.subjects)
-      setVerbs(parsed.verbs)
-      setObjectsByVerb(parsed.objectsByVerb)
-      setSubject(null)
-      setVerb(null)
-      setObjectWord(null)
-      setLastSpoken('')
-      setBackupStatus('Backup restored.')
+      setRestoreDraft({
+        fileName: file.name || 'backup file',
+        config: parsed,
+      })
+      setBackupStatus('Backup loaded. Confirm restore below.')
     } catch {
       setBackupStatus('Could not restore backup.')
     }
+  }
+
+  const onConfirmRestore = () => {
+    if (!restoreDraft) {
+      return
+    }
+
+    setSubjects(restoreDraft.config.subjects)
+    setVerbs(restoreDraft.config.verbs)
+    setObjectsByVerb(restoreDraft.config.objectsByVerb)
+    setSubject(null)
+    setVerb(null)
+    setObjectWord(null)
+    setLastSpoken('')
+    setRestoreDraft(null)
+    setBackupStatus('Backup restored.')
+  }
+
+  const onCancelRestore = () => {
+    setRestoreDraft(null)
+    setBackupStatus('Restore canceled.')
   }
 
   const adminTiles =
@@ -959,6 +995,26 @@ function App() {
               <p className="admin-backup-status" role="status" aria-live="polite">
                 {backupStatus}
               </p>
+            )}
+
+            {restoreDraft && (
+              <div className="admin-restore-modal" role="dialog" aria-modal="true" aria-label="Confirm restore backup">
+                <h3>Confirm restore</h3>
+                <p>
+                  Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
+                </p>
+                <p>
+                  Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length}
+                </p>
+                <div className="admin-restore-actions">
+                  <button type="button" className="admin-btn" onClick={onConfirmRestore}>
+                    Confirm restore
+                  </button>
+                  <button type="button" className="admin-btn ghost" onClick={onCancelRestore}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
 
             <div className="admin-tabs">

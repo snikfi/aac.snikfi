@@ -333,6 +333,29 @@
   font-weight: 700;
 }
 
+.admin-restore-modal {
+  margin-top: 10px;
+  border: 1px solid #d8d9de;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f7f9ff;
+}
+
+.admin-restore-modal h3 {
+  margin: 0 0 8px;
+  color: #121315;
+}
+
+.admin-restore-modal p {
+  margin: 0 0 8px;
+  color: #27324f;
+}
+
+.admin-restore-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .admin-tabs {
   display: flex;
   gap: 8px;
