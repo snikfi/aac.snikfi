@@ -546,8 +546,10 @@ function App() {
   const onCloseAdmin = () => {
     setIsAdminOpen(false)
     setAdminTab('subject')
+    setRestoreDraft(null)
     setExportNotice(null)
     setDeleteDraft(null)
+    setBackupStatus('')
     setDeletedToasts([])
     setCreatedToasts([])
   }
@@ -681,6 +683,8 @@ function App() {
   }
 
   const onRequestDeleteTile = (scope, tile, index) => {
+    setExportNotice(null)
+    setRestoreDraft(null)
     setDeleteDraft({ scope, tile, index })
   }
 
@@ -872,6 +876,8 @@ function App() {
         await writable.write(content)
         await writable.close()
 
+        setRestoreDraft(null)
+        setDeleteDraft(null)
         setExportNotice({
           title: 'Backup exported',
           message: `Your backup file is ready: ${handle.name || backupFileName}`,
@@ -897,6 +903,8 @@ function App() {
     anchor.click()
     anchor.remove()
     window.URL.revokeObjectURL(objectUrl)
+    setRestoreDraft(null)
+    setDeleteDraft(null)
     setExportNotice({
       title: 'Backup download started',
       message: `Your browser started downloading ${backupFileName}. Check your Downloads folder.`,
@@ -922,6 +930,8 @@ function App() {
         return
       }
 
+      setExportNotice(null)
+      setDeleteDraft(null)
       setRestoreDraft({
         fileName: file.name || 'backup file',
         config: parsed,
@@ -1392,16 +1402,16 @@ function App() {
             </div>
           )}
 
-          {exportNotice && (
+          {exportNotice && !restoreDraft && !deleteDraft && (
             <>
               <div
-                className="admin-delete-backdrop"
+                className="admin-export-backdrop"
                 onClick={onCloseExportNotice}
                 aria-hidden="true"
-                style={{ position: 'fixed', inset: 0, zIndex: 74, background: 'rgb(7 8 12 / 0.48)' }}
+                style={{ position: 'fixed', inset: 0, zIndex: 70, backgroundColor: 'rgba(7, 8, 12, 0.48)' }}
               />
               <div
-                className="admin-delete-modal"
+                className="admin-export-modal"
                 role="dialog"
                 aria-modal="true"
                 aria-label="Backup exported"
@@ -1410,15 +1420,16 @@ function App() {
                   top: '50%',
                   left: '50%',
                   transform: 'translate(-50%, -50%)',
-                  zIndex: 75,
+                  zIndex: 71,
                   width: 'min(380px, calc(100vw - 24px))',
+                  backgroundColor: '#ffffff',
                 }}
               >
                 <h3>{exportNotice.title}</h3>
                 <p>
                   <strong>{exportNotice.message}</strong>
                 </p>
-                <div className="admin-delete-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div className="admin-export-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                   <button type="button" className="admin-btn" onClick={onCloseExportNotice}>
                     Close
                   </button>
