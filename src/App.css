@@ -308,6 +308,31 @@
   gap: 10px;
 }
 
+.admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-file-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-file-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.admin-backup-status {
+  margin: 8px 0 0;
+  color: #1f3e23;
+  font-weight: 700;
+}
+
 .admin-tabs {
   display: flex;
   gap: 8px;

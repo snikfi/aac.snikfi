@@ -194,6 +194,7 @@ function App() {
     isRemoteSyncEnabled() ? 'connecting' : 'local-only',
   )
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
+  const [backupStatus, setBackupStatus] = useState('')
   const [lastDeleted, setLastDeleted] = useState(null)
   const [dragState, setDragState] = useState({
     active: false,
@@ -375,6 +376,11 @@ function App() {
       .filter(Boolean)
       .join('  •  ')
   }, [subject, verb, objectWord])
+
+  const tileConfig = useMemo(
+    () => ({ subjects, verbs, objectsByVerb }),
+    [subjects, verbs, objectsByVerb],
+  )
 
   const syncMessage = useMemo(() => {
     if (syncState === 'local-only') {
@@ -665,6 +671,53 @@ function App() {
     }
   }
 
+  const onExportBackup = () => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const timestamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
+    const content = JSON.stringify(tileConfig, null, 2)
+    const blob = new Blob([content], { type: 'application/json' })
+    const objectUrl = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+
+    anchor.href = objectUrl
+    anchor.download = `arti-tiles-backup-${timestamp}.json`
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    window.URL.revokeObjectURL(objectUrl)
+    setBackupStatus('Backup exported.')
+  }
+
+  const onRestoreBackup = async (file) => {
+    if (!file) {
+      return
+    }
+
+    try {
+      const raw = await file.text()
+      const parsed = JSON.parse(raw)
+
+      if (!isValidTileConfig(parsed)) {
+        setBackupStatus('Invalid backup file.')
+        return
+      }
+
+      setSubjects(parsed.subjects)
+      setVerbs(parsed.verbs)
+      setObjectsByVerb(parsed.objectsByVerb)
+      setSubject(null)
+      setVerb(null)
+      setObjectWord(null)
+      setLastSpoken('')
+      setBackupStatus('Backup restored.')
+    } catch {
+      setBackupStatus('Could not restore backup.')
+    }
+  }
+
   const adminTiles =
     adminTab === 'subject' ? subjects : adminTab === 'verb' ? verbs : adminObjectTiles
 
@@ -881,10 +934,32 @@ function App() {
           <section className="admin-panel">
             <header className="admin-header">
               <h2>Tile Admin</h2>
-              <button type="button" className="admin-btn ghost" onClick={onCloseAdmin}>
-                Close
-              </button>
+              <div className="admin-header-actions">
+                <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
+                  Export backup
+                </button>
+                <label className="admin-btn ghost admin-file-btn">
+                  Restore backup
+                  <input
+                    type="file"
+                    accept="application/json"
+                    onChange={(event) => {
+                      onRestoreBackup(event.target.files?.[0])
+                      event.target.value = ''
+                    }}
+                  />
+                </label>
+                <button type="button" className="admin-btn ghost" onClick={onCloseAdmin}>
+                  Close
+                </button>
+              </div>
             </header>
+
+            {backupStatus && (
+              <p className="admin-backup-status" role="status" aria-live="polite">
+                {backupStatus}
+              </p>
+            )}
 
             <div className="admin-tabs">
               <button
