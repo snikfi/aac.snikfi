@@ -215,7 +215,9 @@ function App() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
+  const [exportNotice, setExportNotice] = useState(null)
   const [restoreDraft, setRestoreDraft] = useState(null)
+  const [deleteDraft, setDeleteDraft] = useState(null)
   const [deletedToasts, setDeletedToasts] = useState([])
   const [createdToasts, setCreatedToasts] = useState([])
   const [dragState, setDragState] = useState({
@@ -544,6 +546,8 @@ function App() {
   const onCloseAdmin = () => {
     setIsAdminOpen(false)
     setAdminTab('subject')
+    setExportNotice(null)
+    setDeleteDraft(null)
     setDeletedToasts([])
     setCreatedToasts([])
   }
@@ -676,11 +680,21 @@ function App() {
     setDragState({ active: true, scope, fromIndex: index, overIndex: index })
   }
 
-  const onDeleteTile = (scope, tile, index) => {
-    const confirmed = window.confirm(`Delete \"${tile.label}\" from ${scope} tiles?`)
-    if (!confirmed) {
+  const onRequestDeleteTile = (scope, tile, index) => {
+    setDeleteDraft({ scope, tile, index })
+  }
+
+  const onCancelDeleteTile = () => {
+    setDeleteDraft(null)
+  }
+
+  const onConfirmDeleteTile = () => {
+    if (!deleteDraft) {
       return
     }
+
+    const { scope, tile, index } = deleteDraft
+    setDeleteDraft(null)
 
     if (scope === 'subject') {
       setDeletedToasts((current) => [...current, createDeletedToast({ scope, tile, index })])
@@ -830,24 +844,68 @@ function App() {
     }
   }
 
-  const onExportBackup = () => {
+  const onExportBackup = async () => {
     if (typeof window === 'undefined') {
       return
     }
 
     const timestamp = formatBackupTimestamp()
+    const backupFileName = `arti-tiles-backup-${timestamp}.json`
     const content = JSON.stringify(tileConfig, null, 2)
+    const supportsFilePicker = typeof window.showSaveFilePicker === 'function'
+
+    if (supportsFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: backupFileName,
+          types: [
+            {
+              description: 'JSON backup',
+              accept: {
+                'application/json': ['.json'],
+              },
+            },
+          ],
+        })
+
+        const writable = await handle.createWritable()
+        await writable.write(content)
+        await writable.close()
+
+        setExportNotice({
+          title: 'Backup exported',
+          message: `Your backup file is ready: ${handle.name || backupFileName}`,
+        })
+        setBackupStatus('')
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setBackupStatus('Could not export backup.')
+        }
+      }
+
+      return
+    }
+
+    // Fallback for browsers without the file picker API. Download starts, but save/cancel outcome is not observable.
     const blob = new Blob([content], { type: 'application/json' })
     const objectUrl = window.URL.createObjectURL(blob)
     const anchor = document.createElement('a')
 
     anchor.href = objectUrl
-    anchor.download = `arti-tiles-backup-${timestamp}.json`
+    anchor.download = backupFileName
     document.body.append(anchor)
     anchor.click()
     anchor.remove()
     window.URL.revokeObjectURL(objectUrl)
-    setBackupStatus('Backup exported.')
+    setExportNotice({
+      title: 'Backup download started',
+      message: `Your browser started downloading ${backupFileName}. Check your Downloads folder.`,
+    })
+    setBackupStatus('')
+  }
+
+  const onCloseExportNotice = () => {
+    setExportNotice(null)
   }
 
   const onRestoreBackup = async (file) => {
@@ -1154,26 +1212,6 @@ function App() {
               </p>
             )}
 
-            {restoreDraft && (
-              <div className="admin-restore-modal" role="dialog" aria-modal="true" aria-label="Confirm restore backup">
-                <h3>Confirm restore</h3>
-                <p>
-                  Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
-                </p>
-                <p>
-                  Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length}
-                </p>
-                <div className="admin-restore-actions">
-                  <button type="button" className="admin-btn" onClick={onConfirmRestore}>
-                    Confirm restore
-                  </button>
-                  <button type="button" className="admin-btn ghost" onClick={onCancelRestore}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="admin-tabs">
               <button
                 type="button"
@@ -1265,7 +1303,7 @@ function App() {
                     <button
                       type="button"
                       className="admin-media-btn admin-media-delete"
-                      onClick={() => onDeleteTile(adminTab, item, index)}
+                      onClick={() => onRequestDeleteTile(adminTab, item, index)}
                       aria-label={`Delete ${item.label}`}
                     >
                       <svg
@@ -1352,6 +1390,66 @@ function App() {
                 </div>
               ))}
             </div>
+          )}
+
+          {exportNotice && (
+            <>
+              <div className="admin-export-backdrop" onClick={onCloseExportNotice} aria-hidden="true" />
+              <div className="admin-export-modal" role="dialog" aria-modal="true" aria-label="Backup exported">
+                <h3>{exportNotice.title}</h3>
+                <p>
+                  <strong>{exportNotice.message}</strong>
+                </p>
+                <div className="admin-export-actions">
+                  <button type="button" className="admin-btn" onClick={onCloseExportNotice}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {restoreDraft && (
+            <>
+              <div className="admin-restore-backdrop" onClick={onCancelRestore} aria-hidden="true" />
+              <div className="admin-restore-modal" role="dialog" aria-modal="true" aria-label="Confirm restore backup">
+                <h3>Confirm restore</h3>
+                <p>
+                  Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
+                </p>
+                <p>
+                  Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length}
+                </p>
+                <div className="admin-restore-actions">
+                  <button type="button" className="admin-btn" onClick={onConfirmRestore}>
+                    Confirm restore
+                  </button>
+                  <button type="button" className="admin-btn ghost" onClick={onCancelRestore}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {deleteDraft && (
+            <>
+              <div className="admin-delete-backdrop" onClick={onCancelDeleteTile} aria-hidden="true" />
+              <div className="admin-delete-modal" role="dialog" aria-modal="true" aria-label="Confirm delete tile">
+                <h3>Delete tile?</h3>
+                <p>
+                  Delete &quot;{deleteDraft.tile.label}&quot; from {deleteDraft.scope} tiles?
+                </p>
+                <div className="admin-delete-actions">
+                  <button type="button" className="admin-btn danger" onClick={onConfirmDeleteTile}>
+                    Delete
+                  </button>
+                  <button type="button" className="admin-btn ghost" onClick={onCancelDeleteTile}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
