@@ -1408,31 +1408,23 @@ function App() {
                 className="admin-export-backdrop"
                 onClick={onCloseExportNotice}
                 aria-hidden="true"
-                style={{ position: 'fixed', inset: 0, zIndex: 70, backgroundColor: 'rgba(7, 8, 12, 0.48)' }}
-              />
-              <div
-                className="admin-export-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Backup exported"
-                style={{
-                  position: 'fixed',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  zIndex: 71,
-                  width: 'min(380px, calc(100vw - 24px))',
-                  backgroundColor: '#ffffff',
-                }}
               >
-                <h3>{exportNotice.title}</h3>
-                <p>
-                  <strong>{exportNotice.message}</strong>
-                </p>
-                <div className="admin-export-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                  <button type="button" className="admin-btn" onClick={onCloseExportNotice}>
-                    Close
-                  </button>
+                <div
+                  className="admin-export-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Backup exported"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <h3>{exportNotice.title}</h3>
+                  <p>
+                    <strong>{exportNotice.message}</strong>
+                  </p>
+                  <div className="admin-export-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button type="button" className="admin-btn" onClick={onCloseExportNotice}>
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -1440,22 +1432,29 @@ function App() {
 
           {restoreDraft && (
             <>
-              <div className="admin-restore-backdrop" onClick={onCancelRestore} aria-hidden="true" />
-              <div className="admin-restore-modal" role="dialog" aria-modal="true" aria-label="Confirm restore backup">
-                <h3>Confirm restore</h3>
-                <p>
-                  Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
-                </p>
-                <p>
-                  Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length}
-                </p>
-                <div className="admin-restore-actions">
-                  <button type="button" className="admin-btn" onClick={onConfirmRestore}>
-                    Confirm restore
-                  </button>
-                  <button type="button" className="admin-btn ghost" onClick={onCancelRestore}>
-                    Cancel
-                  </button>
+              <div className="admin-restore-backdrop" onClick={onCancelRestore} aria-hidden="true">
+                <div
+                  className="admin-restore-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Confirm restore backup"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <h3>Confirm restore</h3>
+                  <p>
+                    Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
+                  </p>
+                  <p>
+                    Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length}
+                  </p>
+                  <div className="admin-restore-actions">
+                    <button type="button" className="admin-btn" onClick={onConfirmRestore}>
+                      Confirm restore
+                    </button>
+                    <button type="button" className="admin-btn ghost" onClick={onCancelRestore}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
