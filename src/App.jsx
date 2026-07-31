@@ -693,6 +693,48 @@ function App() {
     }
   }
 
+  const onDuplicateTile = (scope, tile, index) => {
+    const duplicate = {
+      ...structuredClone(tile),
+      id: toTileId(tile.label),
+      label: `${tile.label} copy`,
+    }
+
+    if (scope === 'subject') {
+      setSubjects((current) => {
+        const next = [...current]
+        next.splice(index + 1, 0, duplicate)
+        return next
+      })
+      return
+    }
+
+    if (scope === 'verb') {
+      setVerbs((current) => {
+        const next = [...current]
+        next.splice(index + 1, 0, duplicate)
+        return next
+      })
+
+      setObjectsByVerb((current) => ({
+        ...current,
+        [duplicate.id]: structuredClone(current[tile.id] || []),
+      }))
+      return
+    }
+
+    if (scope === 'object' && objectVerbId) {
+      setObjectsByVerb((current) => {
+        const next = [...(current[objectVerbId] || [])]
+        next.splice(index + 1, 0, duplicate)
+        return {
+          ...current,
+          [objectVerbId]: next,
+        }
+      })
+    }
+  }
+
   const onUndoDelete = () => {
     if (!lastDeleted) {
       return
@@ -1193,20 +1235,45 @@ function App() {
                   }`}
                   data-admin-item-index={index}
                 >
-                  <img src={item.image} alt="" aria-hidden="true" />
+                  <div className="admin-item-media">
+                    <img src={item.image} alt="" aria-hidden="true" />
+                    <button
+                      type="button"
+                      className="admin-media-btn admin-media-drag admin-drag-handle"
+                      onPointerDown={(event) => onStartDragTile(adminTab, index, event)}
+                      aria-label={`Drag to reorder ${item.label}`}
+                    >
+                      ↕
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-media-btn admin-media-delete"
+                      onClick={() => onDeleteTile(adminTab, item, index)}
+                      aria-label={`Delete ${item.label}`}
+                    >
+                      <svg
+                        className="admin-media-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M9 3h6m-8 3h10m-1 0-.7 12.2A2 2 0 0 1 13.3 20h-2.6a2 2 0 0 1-2-1.8L8 6m3 4v6m2-6v6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                   <div className="admin-item-fields">
                     <input
                       type="text"
                       value={item.label}
                       onChange={(event) =>
                         onEditTile(adminTab, item.id, 'label', event.target.value)
-                      }
-                    />
-                    <input
-                      type="text"
-                      value={item.image}
-                      onChange={(event) =>
-                        onEditTile(adminTab, item.id, 'image', event.target.value)
                       }
                     />
                     <input
@@ -1218,14 +1285,6 @@ function App() {
                     />
                   </div>
                   <div className="admin-item-actions">
-                    <button
-                      type="button"
-                      className="admin-btn ghost admin-drag-handle"
-                      onPointerDown={(event) => onStartDragTile(adminTab, index, event)}
-                      aria-label={`Drag to reorder ${item.label}`}
-                    >
-                      Drag
-                    </button>
                     <button
                       type="button"
                       className="admin-btn ghost"
@@ -1242,10 +1301,10 @@ function App() {
                     </button>
                     <button
                       type="button"
-                      className="admin-btn danger"
-                      onClick={() => onDeleteTile(adminTab, item, index)}
+                      className="admin-btn ghost"
+                      onClick={() => onDuplicateTile(adminTab, item, index)}
                     >
-                      Delete
+                      Duplicate
                     </button>
                   </div>
                 </article>
