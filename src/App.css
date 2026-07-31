@@ -485,6 +485,12 @@
   box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
 }
 
+.admin-toast-success {
+  border-color: #b8d9bf;
+  background: #eaf8ec;
+  color: #1b4a25;
+}
+
 .admin-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

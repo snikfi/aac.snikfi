@@ -217,6 +217,7 @@ function App() {
   const [backupStatus, setBackupStatus] = useState('')
   const [restoreDraft, setRestoreDraft] = useState(null)
   const [deletedToasts, setDeletedToasts] = useState([])
+  const [createdToasts, setCreatedToasts] = useState([])
   const [dragState, setDragState] = useState({
     active: false,
     scope: '',
@@ -544,6 +545,7 @@ function App() {
     setIsAdminOpen(false)
     setAdminTab('subject')
     setDeletedToasts([])
+    setCreatedToasts([])
   }
 
   const createDeletedToast = (payload) => {
@@ -551,6 +553,16 @@ function App() {
       undoId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       ...payload,
     }
+  }
+
+  const addCreatedToast = (message) => {
+    const toastId = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+    setCreatedToasts((current) => [...current, { toastId, message }])
+
+    window.setTimeout(() => {
+      setCreatedToasts((current) => current.filter((toast) => toast.toastId !== toastId))
+    }, 3000)
   }
 
   const createNewTile = (label, image) => {
@@ -584,6 +596,7 @@ function App() {
       }))
     }
 
+    addCreatedToast(`Added "${label}".`)
     setNewTileName('')
     setNewTileImage('')
   }
@@ -1316,8 +1329,14 @@ function App() {
             </div>
           </section>
 
-          {deletedToasts.length > 0 && (
+          {(deletedToasts.length > 0 || createdToasts.length > 0) && (
             <div className="admin-undo-toast-stack" aria-live="polite">
+              {createdToasts.map((toast) => (
+                <div key={toast.toastId} className="admin-undo-toast admin-toast-success" role="status">
+                  <span>{toast.message}</span>
+                </div>
+              ))}
+
               {deletedToasts.map((toast) => (
                 <div key={toast.undoId} className="admin-undo-toast" role="status">
                   <span>
