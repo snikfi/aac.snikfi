@@ -1394,13 +1394,13 @@ function App() {
 
           {exportNotice && (
             <>
-              <div className="admin-export-backdrop" onClick={onCloseExportNotice} aria-hidden="true" />
-              <div className="admin-export-modal" role="dialog" aria-modal="true" aria-label="Backup exported">
+              <div className="admin-restore-backdrop" onClick={onCloseExportNotice} aria-hidden="true" />
+              <div className="admin-restore-modal" role="dialog" aria-modal="true" aria-label="Backup exported">
                 <h3>{exportNotice.title}</h3>
                 <p>
                   <strong>{exportNotice.message}</strong>
                 </p>
-                <div className="admin-export-actions">
+                <div className="admin-restore-actions">
                   <button type="button" className="admin-btn" onClick={onCloseExportNotice}>
                     Close
                   </button>
