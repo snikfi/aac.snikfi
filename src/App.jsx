@@ -212,6 +212,7 @@ function App() {
   )
   const [isSyncTipOpen, setIsSyncTipOpen] = useState(false)
   const syncTipRef = useRef(null)
+  const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [restoreDraft, setRestoreDraft] = useState(null)
@@ -254,6 +255,7 @@ function App() {
           setObjectsByVerb(remoteConfig.objectsByVerb)
         }
 
+        setLastSyncedAt(new Date())
         setSyncState('synced')
       } catch {
         if (!isCanceled) {
@@ -284,6 +286,7 @@ function App() {
     const timeoutId = window.setTimeout(() => {
       saveRemoteTileConfig(payload)
         .then(() => {
+          setLastSyncedAt(new Date())
           setSyncState('synced')
         })
         .catch(() => {
@@ -456,6 +459,37 @@ function App() {
   const syncTone = useMemo(() => {
     return syncState === 'error' || syncState === 'local-only' ? 'error' : 'ok'
   }, [syncState])
+
+  const lastSyncedLabel = useMemo(() => {
+    if (!lastSyncedAt || typeof Intl === 'undefined') {
+      return ''
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(lastSyncedAt)
+  }, [lastSyncedAt])
+
+  const syncDetailMessage = useMemo(() => {
+    if (!isRemoteSyncEnabled()) {
+      return 'Cloud sync disabled'
+    }
+
+    if (lastSyncedLabel) {
+      return `Last synced ${lastSyncedLabel}`
+    }
+
+    if (syncState === 'connecting' || syncState === 'saving') {
+      return 'Sync in progress'
+    }
+
+    if (syncState === 'error') {
+      return 'Last sync failed'
+    }
+
+    return 'Waiting for first sync'
+  }, [lastSyncedLabel, syncState])
 
   const topSelections = useMemo(
     () => [
@@ -926,7 +960,8 @@ function App() {
                 {syncTone === 'ok' ? '☁︎' : '⚠'}
               </span>
               <span className="sync-rail-tooltip" role="status">
-                {syncMessage}
+                <span className="sync-tip-title">{syncMessage}</span>
+                <span className="sync-tip-time">{syncDetailMessage}</span>
               </span>
             </button>
             <button
