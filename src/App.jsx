@@ -1039,10 +1039,15 @@ function App() {
   }
 
   const onDuplicateTile = (scope, tile, index) => {
+    const duplicateLabel = `${tile.label} copy`
     const duplicate = {
       ...structuredClone(tile),
       id: toTileId(tile.label),
-      label: `${tile.label} copy`,
+      label: duplicateLabel,
+    }
+
+    if (isGeneratedBadgeImage(tile.image)) {
+      duplicate.image = makeBadgeImage(duplicateLabel, getTileBadgeBackground(scope))
     }
 
     if (scope === 'subject') {
