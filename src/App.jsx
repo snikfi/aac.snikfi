@@ -1669,7 +1669,11 @@ function App() {
   const onRepeat = () => {
     const sentence = enhanceSentence(subject, verb, objectWord)
     const fallback = sentencePreview.replaceAll('  •  ', ' ')
-    speakText(lastSpoken || sentence || fallback)
+    const replayText = isThreeStepMode
+      ? (sentence || lastSpoken || fallback)
+      : (lastSpoken || sentence || fallback)
+
+    speakText(replayText)
   }
 
   const onBackspace = () => {
