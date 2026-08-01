@@ -41,8 +41,8 @@
 }
 
 .top-backspace {
-  width: 72px;
-  height: 78px;
+  width: 60px;
+  height: 60px;
   border-radius: 18px;
   border: 1px solid #d8d8d8;
   background: #ececec;
@@ -1484,6 +1484,20 @@ button:focus-visible {
     border: 0;
   }
 
+  .figma-shell.mobile-free-mode-layout .mode-rail-btn.free {
+    width: 56px;
+    min-width: 56px;
+    padding: 6px 4px;
+  }
+
+  .figma-shell.mobile-free-mode-layout .mode-rail-btn.free .mode-rail-label {
+    display: block;
+    max-width: 30px;
+    white-space: normal;
+    line-height: 1.05;
+    text-align: center;
+  }
+
   .side-rail {
     flex-direction: row;
     align-items: center;
@@ -1547,7 +1561,11 @@ button:focus-visible {
     height: 56px;
   }
 
-  .top-backspace,
+  .top-backspace {
+    width: 60px;
+    height: 60px;
+  }
+
   .control-btn {
     width: 64px;
     height: 64px;
