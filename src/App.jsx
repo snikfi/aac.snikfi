@@ -1713,7 +1713,19 @@ function App() {
           onClick={() => setIsThreeStepMode((current) => !current)}
           aria-label={isThreeStepMode ? 'Disable 3-step mode' : 'Enable 3-step mode'}
         >
-          <span className="mode-rail-label">{isThreeStepMode ? '3-step mode' : 'free mode'}</span>
+          {isThreeStepMode ? (
+            <div className="step-badge" aria-hidden="true">
+              <svg width="14" height="20.692" viewBox="0 0 14 20.692" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M0.588 5.866C0.728 4.89533 0.998667 4.046 1.4 3.318C1.80133 2.58067 2.30067 1.96933 2.898 1.484C3.50467 0.989333 4.19533 0.620666 4.97 0.377999C5.754 0.126 6.594 0 7.49 0C8.42333 0 9.26333 0.135333 10.01 0.405999C10.766 0.667332 11.41 1.036 11.942 1.512C12.474 1.97867 12.88 2.52933 13.16 3.164C13.4493 3.79867 13.594 4.48467 13.594 5.222C13.594 5.866 13.5193 6.43533 13.37 6.93C13.23 7.41533 13.0247 7.84 12.754 8.204C12.4833 8.568 12.1473 8.876 11.746 9.128C11.3447 9.38 10.892 9.59 10.388 9.758C11.6013 10.1407 12.5067 10.724 13.104 11.508C13.7013 12.292 14 13.2767 14 14.462C14 15.47 13.8133 16.3613 13.44 17.136C13.0667 17.9107 12.5627 18.564 11.928 19.096C11.2933 19.6187 10.556 20.0153 9.716 20.286C8.88533 20.5567 8.00333 20.692 7.07 20.692C6.05267 20.692 5.166 20.5753 4.41 20.342C3.654 20.1087 2.996 19.7633 2.436 19.306C1.876 18.8487 1.4 18.2887 1.008 17.626C0.616 16.9633 0.28 16.198 0 15.33L1.526 14.7C1.92733 14.532 2.30067 14.49 2.646 14.574C3.00067 14.6487 3.25733 14.8353 3.416 15.134C3.584 15.4607 3.766 15.7827 3.962 16.1C4.16733 16.4173 4.41 16.702 4.69 16.954C4.97 17.1967 5.29667 17.3973 5.67 17.556C6.05267 17.7053 6.50533 17.78 7.028 17.78C7.616 17.78 8.12933 17.6867 8.568 17.5C9.00667 17.304 9.37067 17.052 9.66 16.744C9.95867 16.436 10.178 16.0953 10.318 15.722C10.4673 15.3393 10.542 14.9567 10.542 14.574C10.542 14.0887 10.4907 13.65 10.388 13.258C10.2853 12.8567 10.0707 12.516 9.744 12.236C9.41733 11.956 8.946 11.7367 8.33 11.578C7.72333 11.4193 6.90667 11.34 5.88 11.34V8.876C6.72933 8.86667 7.434 8.78733 7.994 8.638C8.554 8.48867 8.99733 8.28333 9.324 8.022C9.66 7.75133 9.89333 7.42933 10.024 7.056C10.1547 6.68267 10.22 6.272 10.22 5.824C10.22 4.872 9.954 4.14867 9.422 3.654C8.89 3.15933 8.18067 2.912 7.294 2.912C6.88333 2.912 6.50533 2.97267 6.16 3.094C5.81467 3.206 5.502 3.36933 5.222 3.584C4.95133 3.78933 4.72267 4.032 4.536 4.312C4.34933 4.592 4.20933 4.9 4.116 5.236C3.95733 5.66533 3.74733 5.95 3.486 6.09C3.234 6.23 2.87467 6.26267 2.408 6.188L0.588 5.866Z"
+                  fill="#E8E8E8"
+                />
+              </svg>
+              <span className="label">step</span>
+            </div>
+          ) : (
+            <span className="mode-rail-label">free mode</span>
+          )}
         </button>
         <button
           ref={syncTipRef}
@@ -1776,17 +1788,66 @@ function App() {
             aria-label="Backspace one step"
             disabled={!subject && !verb && !objectWord}
           >
-            <span className="backspace-icon">⌫</span>
+            <div className="back-btn-inner" aria-hidden="true">
+              <svg width="39.4574" height="40" viewBox="0 0 39.4574 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M29.593 25H19.7287V31.6667L8.22029 20L19.7287 8.33333V15H29.593V25Z"
+                  stroke="black"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
           </button>
         </div>
         <div className="top-controls">
-          <button type="button" className="control-btn" onClick={onRepeat}>
-            <span className="control-icon">🔊</span>
-            <span>Play</span>
+          <button type="button" className="control-btn play-btn" onClick={onRepeat}>
+            <div className="icon-card-bg" aria-hidden="true" />
+            <svg className="icon-card-svg play-svg" width="34.9411" height="34.9411" viewBox="0 0 34.9411 34.9411" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <path
+                d="M16.0147 6.84554C16.0144 6.64275 15.954 6.4446 15.8412 6.27608C15.7284 6.10757 15.5682 5.97624 15.3809 5.89868C15.1935 5.82111 14.9873 5.80079 14.7884 5.84027C14.5895 5.87975 14.4068 5.97727 14.2632 6.12051L9.33655 11.0457C9.14642 11.237 8.92022 11.3887 8.67105 11.4919C8.42189 11.5951 8.15473 11.6478 7.88504 11.647H4.36763C3.98151 11.647 3.6112 11.8004 3.33817 12.0734C3.06514 12.3465 2.91176 12.7168 2.91176 13.1029V21.8382C2.91176 22.2243 3.06514 22.5946 3.33817 22.8676C3.6112 23.1407 3.98151 23.2941 4.36763 23.2941H7.88504C8.15473 23.2933 8.42189 23.346 8.67105 23.4492C8.92022 23.5524 9.14642 23.7041 9.33655 23.8953L14.2618 28.822C14.4053 28.9659 14.5883 29.0638 14.7876 29.1036C14.9869 29.1433 15.1935 29.123 15.3812 29.0451C15.569 28.9673 15.7294 28.8356 15.8421 28.6665C15.9549 28.4975 16.0149 28.2987 16.0147 28.0955V6.84554Z"
+                stroke="black"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M23.2941 13.1029C24.2391 14.3629 24.7499 15.8955 24.7499 17.4705C24.7499 19.0456 24.2391 20.5781 23.2941 21.8382"
+                stroke="black"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M28.1916 26.7357C29.4084 25.519 30.3735 24.0746 31.032 22.4848C31.6905 20.8951 32.0294 19.1912 32.0294 17.4705C32.0294 15.7498 31.6905 14.046 31.032 12.4562C30.3735 10.8665 29.4084 9.42205 28.1916 8.20533"
+                stroke="black"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div className="icon-card-label play-label">Play</div>
           </button>
-          <button type="button" className="control-btn" onClick={onRestart}>
-            <span className="control-icon">↻</span>
-            <span>Refresh</span>
+          <button type="button" className="control-btn refresh-btn" onClick={onRestart}>
+            <div className="icon-card-bg" aria-hidden="true" />
+            <svg className="icon-card-svg refresh-svg" width="34.9411" height="34.9411" viewBox="0 0 34.9411 34.9411" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <path
+                d="M4.36763 17.4705C4.36763 20.062 5.13611 22.5954 6.57587 24.7501C8.01564 26.9049 10.062 28.5843 12.4563 29.576C14.8505 30.5678 17.4851 30.8273 20.0268 30.3217C22.5685 29.8161 24.9032 28.5682 26.7357 26.7357C28.5682 24.9032 29.8161 22.5685 30.3217 20.0268C30.8273 17.4851 30.5678 14.8505 29.576 12.4563C28.5843 10.062 26.9049 8.01564 24.7501 6.57587C22.5954 5.13611 20.062 4.36763 17.4705 4.36763C13.8075 4.38141 10.2916 5.81074 7.65792 8.35674L4.36763 11.647"
+                stroke="black"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M4.36763 4.36763V11.647H11.647"
+                stroke="black"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div className="icon-card-label refresh-label">Refresh</div>
           </button>
         </div>
       </header>

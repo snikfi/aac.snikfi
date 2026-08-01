@@ -41,12 +41,13 @@
 }
 
 .top-backspace {
-  width: 66px;
-  height: 66px;
+  width: 72px;
+  height: 78px;
   border-radius: 18px;
-  border: 1px solid #e7e7e7;
-  background: #ffffff;
+  border: 1px solid #d8d8d8;
+  background: #ececec;
   color: #060606;
+  padding: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -57,11 +58,6 @@
 .top-backspace:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.backspace-icon {
-  font-size: 28px;
-  line-height: 1;
 }
 
 .top-selection-chip {
@@ -153,23 +149,38 @@
 }
 
 .control-btn {
+  position: relative;
   width: 72px;
   height: 78px;
   border-radius: 18px;
-  border: 1px solid #e7e7e7;
-  background: #ffffff;
+  border: 1px solid #d8d8d8;
+  background: #ececec;
+  overflow: hidden;
+  padding: 6px 4px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   font-family: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
   font-size: 11px;
+  font-weight: 700;
   cursor: pointer;
 }
 
-.control-icon {
-  font-size: 24px;
+.icon-card-svg {
+  position: relative;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+}
+
+.icon-card-label {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: #111111;
   line-height: 1;
 }
 
@@ -280,6 +291,33 @@
   border-color: #607d74;
   background: #4e5f5a;
   color: #d8f1e2;
+}
+
+.mode-rail-btn.three-step {
+  border-color: #6f6f6f;
+  background: #525252;
+  color: #e8e8e8;
+}
+
+.mode-rail-btn .step-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+.mode-rail-btn .step-badge svg {
+  display: block;
+}
+
+.mode-rail-btn .step-badge .label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  color: #e8e8e8;
 }
 
 .mode-rail-label {
