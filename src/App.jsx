@@ -291,6 +291,7 @@ function App() {
   const [exportNotice, setExportNotice] = useState(null)
   const [restoreDraft, setRestoreDraft] = useState(null)
   const [deleteDraft, setDeleteDraft] = useState(null)
+  const [moveObjectDraft, setMoveObjectDraft] = useState(null)
   const [deletedToasts, setDeletedToasts] = useState([])
   const [createdToasts, setCreatedToasts] = useState([])
   const [dragState, setDragState] = useState({
@@ -914,6 +915,7 @@ function App() {
     setRestoreDraft(null)
     setExportNotice(null)
     setDeleteDraft(null)
+    setMoveObjectDraft(null)
     setBackupStatus('')
     setDeletedToasts([])
     setCreatedToasts([])
@@ -935,10 +937,10 @@ function App() {
     }
   }
 
-  const addCreatedToast = (message) => {
+  const addCreatedToast = (message, tone) => {
     const toastId = `${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-    setCreatedToasts((current) => [...current, { toastId, message }])
+    setCreatedToasts((current) => [...current, { toastId, message, tone }])
 
     window.setTimeout(() => {
       setCreatedToasts((current) => current.filter((toast) => toast.toastId !== toastId))
@@ -976,7 +978,8 @@ function App() {
       }))
     }
 
-    addCreatedToast(`Added "${label}".`)
+    const createdTypeLabel = adminTab.charAt(0).toUpperCase() + adminTab.slice(1)
+    addCreatedToast(`${createdTypeLabel} tile '${label}' created.`, adminTab)
     setNewTileName('')
     setNewTileImage('')
   }
@@ -1071,7 +1074,64 @@ function App() {
   const onRequestDeleteTile = (scope, tile, index) => {
     setExportNotice(null)
     setRestoreDraft(null)
+    setMoveObjectDraft(null)
     setDeleteDraft({ scope, tile, index })
+  }
+
+  const onRequestMoveObjectTile = (tile, index) => {
+    if (adminTab !== 'object' || !objectVerbId) {
+      return
+    }
+
+    setExportNotice(null)
+    setRestoreDraft(null)
+    setDeleteDraft(null)
+    setMoveObjectDraft({
+      tile,
+      index,
+      fromVerbId: objectVerbId,
+      toVerbId: objectVerbId,
+    })
+  }
+
+  const onCancelMoveObjectTile = () => {
+    setMoveObjectDraft(null)
+  }
+
+  const onConfirmMoveObjectTile = () => {
+    if (!moveObjectDraft) {
+      return
+    }
+
+    const { tile, index, fromVerbId, toVerbId } = moveObjectDraft
+    setMoveObjectDraft(null)
+
+    if (!fromVerbId || !toVerbId || fromVerbId === toVerbId) {
+      return
+    }
+
+    setObjectsByVerb((current) => {
+      const sourceTiles = [...(current[fromVerbId] || [])]
+      const [movedTile] = sourceTiles.splice(index, 1)
+
+      if (!movedTile) {
+        return current
+      }
+
+      const targetTiles = [...(current[toVerbId] || []), movedTile]
+
+      return {
+        ...current,
+        [fromVerbId]: sourceTiles,
+        [toVerbId]: targetTiles,
+      }
+    })
+
+    const destinationVerb = verbs.find((item) => item.id === toVerbId)
+    addCreatedToast(
+      `Object tile '${tile.label}' reassigned to '${destinationVerb?.label || 'selected verb'}'.`,
+      'object',
+    )
   }
 
   const onCancelDeleteTile = () => {
@@ -1361,6 +1421,9 @@ function App() {
   const adminTiles =
     adminTab === 'subject' ? subjects : adminTab === 'verb' ? verbs : adminObjectTiles
   const adminTabLabel = adminTab === 'subject' ? 'subject' : adminTab === 'verb' ? 'verb' : 'object'
+  const createTileTitle = adminTabLabel === 'object' ? 'Create an object tile' : `Create a ${adminTabLabel} tile`
+  const searchTileTitle = `Search ${adminTabLabel} tiles`
+  const selectedObjectVerb = verbs.find((item) => item.id === objectVerbId)
   const subjectTileCount = subjects.length
   const verbTileCount = verbs.length
   const objectTileCount = Object.values(objectsByVerb).reduce(
@@ -1850,46 +1913,56 @@ function App() {
             </div>
 
             {adminTab === 'object' && (
-              <label className="admin-row">
-                <span>Object set for verb</span>
-                <select
-                  value={objectVerbId}
-                  onChange={(event) => setObjectVerbId(event.target.value)}
-                >
-                  {verbs.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <>
+                <div className="admin-object-help" role="note" aria-live="polite">
+                  <p>
+                    Choose a verb first. New object tiles will be added to that verb.
+                  </p>
+                </div>
+                <label className="admin-row">
+                  <span>Select verb category</span>
+                  <select
+                    value={objectVerbId}
+                    onChange={(event) => setObjectVerbId(event.target.value)}
+                  >
+                    {verbs.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
 
-            <div className="admin-create">
-              <input
-                type="text"
-                value={newTileName}
-                onChange={(event) => setNewTileName(event.target.value)}
-                placeholder="Tile name"
-              />
-              <input
-                type="text"
-                value={newTileImage}
-                onChange={(event) => setNewTileImage(event.target.value)}
-                placeholder="Image URL (optional)"
-              />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
-              />
-              <button type="button" className="admin-btn" onClick={onAddTile}>
-                Add tile
-              </button>
-            </div>
+            <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
+              <h3>{createTileTitle}</h3>
+              <p>Give the tile a name, then add an image.</p>
+              <div className="admin-create">
+                <input
+                  type="text"
+                  value={newTileName}
+                  onChange={(event) => setNewTileName(event.target.value)}
+                  placeholder="Tile name"
+                />
+                <label className="admin-btn admin-file-btn admin-upload-btn">
+                  Upload an image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
+                  />
+                </label>
+                <button type="button" className="admin-btn" onClick={onAddTile}>
+                  {`Create ${adminTabLabel} tile`}
+                </button>
+              </div>
+            </section>
+
+            <div className="admin-section-divider" aria-hidden="true" />
 
             <label className="admin-search-row">
-              <span>Search tiles</span>
+              <span>{searchTileTitle}</span>
               <input
                 type="search"
                 value={adminSearchQuery}
@@ -1897,6 +1970,14 @@ function App() {
                 placeholder="Search by tile name"
               />
             </label>
+
+            {adminTab === 'object' && (
+              <h3 className="admin-list-title">
+                {selectedObjectVerb
+                  ? `Object tiles for "${selectedObjectVerb.label}"`
+                  : 'Object tiles'}
+              </h3>
+            )}
 
             <div className="admin-list">
               {visibleAdminTiles.map(({ item, sourceIndex }) => (
@@ -1978,7 +2059,7 @@ function App() {
                       }
                     />
                   </div>
-                  <div className="admin-item-actions">
+                  <div className={`admin-item-actions ${adminTab === 'object' ? 'object-actions' : ''}`}>
                     <button
                       type="button"
                       className="admin-btn ghost"
@@ -2000,6 +2081,15 @@ function App() {
                     >
                       Duplicate
                     </button>
+                    {adminTab === 'object' && (
+                      <button
+                        type="button"
+                        className="admin-btn ghost"
+                        onClick={() => onRequestMoveObjectTile(item, sourceIndex)}
+                      >
+                        Change verb
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -2008,7 +2098,7 @@ function App() {
             {visibleAdminTiles.length === 0 && (
               <p className="admin-empty-state" role="status" aria-live="polite">
                 {normalizedAdminSearch
-                  ? `No ${adminTabLabel} tiles found for "${adminSearchQuery.trim()}".`
+                  ? `No ${adminTabLabel} tiles found for "${adminSearchQuery.trim()}". Create a new ${adminTabLabel} tile above.`
                   : `No ${adminTabLabel} tiles found.`}
               </p>
             )}
@@ -2017,7 +2107,7 @@ function App() {
           {(deletedToasts.length > 0 || createdToasts.length > 0) && (
             <div className="admin-undo-toast-stack" aria-live="polite">
               {createdToasts.map((toast) => (
-                <div key={toast.toastId} className="admin-undo-toast admin-toast-success" role="status">
+                <div key={toast.toastId} className={`admin-undo-toast admin-toast-success admin-toast-${toast.tone || 'subject'}`} role="status">
                   <span>{toast.message}</span>
                 </div>
               ))}
@@ -2120,6 +2210,45 @@ function App() {
                     Delete
                   </button>
                   <button type="button" className="admin-btn ghost" onClick={onCancelDeleteTile}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {moveObjectDraft && (
+            <>
+              <div className="admin-move-backdrop" onClick={onCancelMoveObjectTile} aria-hidden="true" />
+              <div className="admin-move-modal" role="dialog" aria-modal="true" aria-label="Change object tile verb">
+                <h3>Change verb category</h3>
+                <p>
+                  Move &quot;{moveObjectDraft.tile.label}&quot; to:
+                </p>
+                <select
+                  value={moveObjectDraft.toVerbId}
+                  onChange={(event) =>
+                    setMoveObjectDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            toVerbId: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  {verbs.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="admin-move-actions">
+                  <button type="button" className="admin-btn" onClick={onConfirmMoveObjectTile}>
+                    Move tile
+                  </button>
+                  <button type="button" className="admin-btn ghost" onClick={onCancelMoveObjectTile}>
                     Cancel
                   </button>
                 </div>
