@@ -627,6 +627,11 @@ function App() {
     return 'Locked'
   }, [adminSessionExpiresLabel, hasAdminAuth])
 
+  const localAttemptsRemaining = Math.max(
+    0,
+    ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK - adminFailedAttempts,
+  )
+
   const topSelections = useMemo(
     () => [
       {
@@ -730,33 +735,31 @@ function App() {
     } catch (error) {
       if (error instanceof Error && error.code === 'INVALID_ADMIN_CODE') {
         if (typeof error.attemptsRemaining === 'number') {
-          setAdminFailedAttempts(
-            Math.max(0, ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK - error.attemptsRemaining),
-          )
+          setAdminFailedAttempts(Math.max(0, ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK - error.attemptsRemaining))
           const triesLabel = error.attemptsRemaining === 1 ? 'try' : 'tries'
           setPinError(`Incorrect code. ${error.attemptsRemaining} ${triesLabel} left.`)
+          setPinInput('')
         } else {
-          setAdminFailedAttempts((current) => {
-            const nextAttempts = current + 1
+          const nextAttempts = adminFailedAttempts + 1
+          setAdminFailedAttempts(nextAttempts)
+          setPinInput('')
 
-            if (nextAttempts >= ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK) {
-              setAdminUnlockLockedUntil(
-                Date.now() + ADMIN_UNLOCK_LOCKOUT_MINUTES_FALLBACK * 60 * 1000,
-              )
-              setPinError('Too many attempts.')
-              return nextAttempts
-            }
-
+          if (nextAttempts >= ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK) {
+            setAdminUnlockLockedUntil(
+              Date.now() + ADMIN_UNLOCK_LOCKOUT_MINUTES_FALLBACK * 60 * 1000,
+            )
+            setPinError('Too many attempts.')
+          } else {
             const attemptsRemaining = ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK - nextAttempts
             const triesLabel = attemptsRemaining === 1 ? 'try' : 'tries'
             setPinError(`Incorrect code. ${attemptsRemaining} ${triesLabel} left.`)
-            return nextAttempts
-          })
+          }
         }
       } else if (error instanceof Error && error.code === 'ADMIN_UNLOCK_LOCKED') {
         const retryAfterSeconds = Math.max(1, Number(error.retryAfterSeconds || 0))
         setAdminUnlockLockedUntil(Date.now() + retryAfterSeconds * 1000)
         setPinError('Too many attempts.')
+        setPinInput('')
       } else {
         setPinError('Could not verify code. Try again.')
       }
@@ -1448,6 +1451,11 @@ function App() {
             {isAdminUnlockLocked && (
               <p className="admin-pin-status" role="status" aria-live="polite">
                 Try again in {formatDurationLabel(adminLockoutRemainingMs)}.
+              </p>
+            )}
+            {!isAdminUnlockLocked && adminFailedAttempts > 0 && localAttemptsRemaining > 0 && (
+              <p className="admin-pin-status" role="status" aria-live="polite">
+                {localAttemptsRemaining} {localAttemptsRemaining === 1 ? 'try' : 'tries'} remaining.
               </p>
             )}
             <div className="admin-pin-actions">
