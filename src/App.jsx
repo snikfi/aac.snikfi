@@ -425,6 +425,43 @@ function App() {
     }
   }, [dragState.active])
 
+  useEffect(() => {
+    if (!isPinOpen || isUnlockingAdmin) {
+      return undefined
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key >= '0' && event.key <= '9') {
+        event.preventDefault()
+        onAppendPinDigit(event.key)
+        return
+      }
+
+      if (event.key === 'Backspace') {
+        event.preventDefault()
+        onDeletePinDigit()
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClearPin()
+        return
+      }
+
+      if (event.key === 'Enter' && pinInput) {
+        event.preventDefault()
+        onSubmitPin()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isPinOpen, isUnlockingAdmin, pinInput])
+
   const objectOptions = useMemo(() => {
     if (!verb) {
       return []
