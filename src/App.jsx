@@ -24,6 +24,8 @@ const TILE_BADGE_SELECTED_BACKGROUNDS = {
   verb: '#f1f6b9',
   object: '#a7d9cb',
 }
+const TILE_UPLOAD_MAX_SIZE = 512
+const TILE_UPLOAD_QUALITY = 0.82
 
 function formatDurationLabel(durationMs) {
   const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000))
@@ -192,6 +194,71 @@ function readFileAsDataUrl(file) {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = window.URL.createObjectURL(file)
+    const image = new Image()
+
+    image.onload = () => {
+      window.URL.revokeObjectURL(objectUrl)
+      resolve(image)
+    }
+
+    image.onerror = (error) => {
+      window.URL.revokeObjectURL(objectUrl)
+      reject(error)
+    }
+
+    image.src = objectUrl
+  })
+}
+
+function exportCanvasDataUrl(canvas, type, quality) {
+  try {
+    const dataUrl = canvas.toDataURL(type, quality)
+    if (dataUrl.startsWith(`data:${type}`)) {
+      return dataUrl
+    }
+  } catch {
+    // Ignore unsupported output formats and continue to fallbacks.
+  }
+
+  return ''
+}
+
+async function optimizeTileUpload(file) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return readFileAsDataUrl(file)
+  }
+
+  const image = await loadImageFromFile(file)
+  const sourceWidth = image.naturalWidth || image.width || 1
+  const sourceHeight = image.naturalHeight || image.height || 1
+  const longestEdge = Math.max(sourceWidth, sourceHeight)
+  const scale = Math.min(1, TILE_UPLOAD_MAX_SIZE / longestEdge)
+  const targetWidth = Math.max(1, Math.round(sourceWidth * scale))
+  const targetHeight = Math.max(1, Math.round(sourceHeight * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    return readFileAsDataUrl(file)
+  }
+
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(image, 0, 0, targetWidth, targetHeight)
+
+  return (
+    exportCanvasDataUrl(canvas, 'image/webp', TILE_UPLOAD_QUALITY)
+    || exportCanvasDataUrl(canvas, 'image/jpeg', TILE_UPLOAD_QUALITY)
+    || canvas.toDataURL('image/png')
+  )
 }
 
 function speakText(text) {
@@ -1283,7 +1350,7 @@ function App() {
     }
 
     try {
-      const image = await readFileAsDataUrl(file)
+      const image = await optimizeTileUpload(file)
       onEditTile(scope, id, 'image', image)
     } catch {
       // Ignore read errors so the UI remains responsive for the user.
@@ -1296,7 +1363,7 @@ function App() {
     }
 
     try {
-      const image = await readFileAsDataUrl(file)
+      const image = await optimizeTileUpload(file)
       setNewTileImage(image)
     } catch {
       // Ignore read errors so the UI remains responsive for the user.
@@ -2051,13 +2118,16 @@ function App() {
                         onEditTile(adminTab, item.id, 'label', event.target.value)
                       }
                     />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) =>
-                        onUploadTileImage(adminTab, item.id, event.target.files?.[0])
-                      }
-                    />
+                    <label className="admin-btn admin-file-btn admin-upload-btn">
+                      Upload an image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) =>
+                          onUploadTileImage(adminTab, item.id, event.target.files?.[0])
+                        }
+                      />
+                    </label>
                   </div>
                   <div className={`admin-item-actions ${adminTab === 'object' ? 'object-actions' : ''}`}>
                     <button

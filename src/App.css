@@ -792,6 +792,7 @@
   font-weight: 600;
   background: #ffffff;
   color: #121315;
+  border: 1px solid #d8d9de;
 }
 
 .admin-create-card {
@@ -833,7 +834,7 @@
 .admin-section-divider {
   height: 1px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgb(146 163 198 / 0) 0%, rgb(146 163 198 / 0.85) 50%, rgb(146 163 198 / 0) 100%);
+  background: #cfd6e4;
   margin: 4px 0 12px;
 }
 
