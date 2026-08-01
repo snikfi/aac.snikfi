@@ -13,6 +13,11 @@ const STORAGE_KEY = 'arti-aac-tiles-v1'
 const ADMIN_PIN_MAX_LENGTH = 8
 const ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK = 5
 const ADMIN_UNLOCK_LOCKOUT_MINUTES_FALLBACK = 15
+const TILE_BADGE_BACKGROUNDS = {
+  subject: '#fdeaec',
+  verb: '#fafdd9',
+  object: '#c7f5e8',
+}
 
 function formatDurationLabel(durationMs) {
   const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000))
@@ -63,6 +68,10 @@ function makeBadgeImage(label, backgroundColor, foregroundColor = '#060606') {
   `
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
+function getTileBadgeBackground(scope) {
+  return TILE_BADGE_BACKGROUNDS[scope] || TILE_BADGE_BACKGROUNDS.verb
 }
 
 const DEFAULT_OBJECTS_BY_VERB = {}
@@ -805,11 +814,11 @@ function App() {
     }, 3000)
   }
 
-  const createNewTile = (label, image) => {
+  const createNewTile = (label, image, scope) => {
     return {
       id: toTileId(label),
       label,
-      image: image || makeBadgeImage(label, '#fafdd9'),
+      image: image || makeBadgeImage(label, getTileBadgeBackground(scope)),
     }
   }
 
@@ -819,7 +828,7 @@ function App() {
       return
     }
 
-    const tile = createNewTile(label, newTileImage.trim())
+    const tile = createNewTile(label, newTileImage.trim(), adminTab)
 
     if (adminTab === 'subject') {
       setSubjects((current) => [...current, tile])
