@@ -991,9 +991,28 @@ button:focus-visible {
   .board-layout.mode-free .object-column {
     display: block;
     height: auto;
-    min-height: 0;
-    align-self: stretch;
+    min-height: unset;
+    align-self: start;
     overflow-y: visible;
+  }
+
+  .board-layout.mode-free .subject-grid,
+  .board-layout.mode-free .verb-grid,
+  .board-layout.mode-free .object-grid {
+    min-height: 0;
+    height: auto;
+  }
+
+  .figma-shell.mode-free {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .figma-shell.mode-free .board-layout.mode-free {
+    grid-template-rows: auto;
+    min-height: auto;
+    overflow: visible;
   }
 
   .side-rail {

@@ -566,6 +566,23 @@ function App() {
     }
   }, [isPinOpen, isUnlockingAdmin, pinInput, isAdminUnlockLocked])
 
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined
+    }
+
+    const className = 'free-mode-scroll'
+    if (!isThreeStepMode) {
+      document.body.classList.add(className)
+    } else {
+      document.body.classList.remove(className)
+    }
+
+    return () => {
+      document.body.classList.remove(className)
+    }
+  }, [isThreeStepMode])
+
   const objectOptions = useMemo(() => {
     if (isThreeStepMode) {
       if (!verb) {
@@ -1292,6 +1309,7 @@ function App() {
 
   const mobileStepClass = !subject ? 'step-subject' : !verb ? 'step-verb' : 'step-object'
   const boardModeClass = isThreeStepMode ? mobileStepClass : 'mode-free'
+  const shellModeClass = isThreeStepMode ? 'mode-three-step' : 'mode-free'
   const isVerbColumnActive = !isThreeStepMode || Boolean(subject)
   const isObjectColumnActive = !isThreeStepMode || Boolean(verb)
 
@@ -1362,7 +1380,7 @@ function App() {
   }
 
   return (
-    <main className="figma-shell" data-node-id="1:59">
+    <main className={`figma-shell ${shellModeClass}`} data-node-id="1:59">
       <header className="top-strip">
         <div className="top-left-group">
           <div className="top-left">
