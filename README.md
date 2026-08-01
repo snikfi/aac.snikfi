@@ -53,6 +53,8 @@ VITE_ARTI_SYNC_URL=http://localhost:8787
 ARTI_ADMIN_PIN=replace-with-long-random-pin
 ARTI_ADMIN_SESSION_SECRET=replace-with-long-random-secret
 ARTI_ADMIN_SESSION_TTL_HOURS=12
+ARTI_ADMIN_MAX_ATTEMPTS=5
+ARTI_ADMIN_LOCKOUT_MINUTES=15
 ```
 
 5. In another terminal, start frontend:
@@ -74,6 +76,8 @@ Required API environment variables:
 - `ARTI_ADMIN_PIN`: server-side PIN used to unlock admin actions
 - `ARTI_ADMIN_SESSION_SECRET`: secret used to sign admin session tokens
 - `ARTI_ADMIN_SESSION_TTL_HOURS`: optional admin token lifetime in hours (default `12`)
+- `ARTI_ADMIN_MAX_ATTEMPTS`: optional failed PIN attempts allowed before lockout (default `5`)
+- `ARTI_ADMIN_LOCKOUT_MINUTES`: optional lockout length after too many failed attempts (default `15`)
 - `CORS_ORIGIN`: frontend origin (for example `https://arti.example.com`)
 - `SUPABASE_URL`: Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
@@ -93,6 +97,7 @@ Required frontend environment variables:
 ## Security Notes
 
 - Admin unlock verification happens on the server and returns a short-lived session token.
+- Repeated failed PIN attempts trigger a temporary server-side lockout.
 - Use HTTPS in production.
 - Keep `ARTI_ADMIN_PIN` and `ARTI_ADMIN_SESSION_SECRET` long and random.
 - Restrict `CORS_ORIGIN` to your app domain.

@@ -13,10 +13,13 @@ const corsOrigin = process.env.CORS_ORIGIN || '*'
 const adminPin = process.env.ARTI_ADMIN_PIN || ''
 const adminSessionSecret = process.env.ARTI_ADMIN_SESSION_SECRET || ''
 const adminSessionTtlHours = Number(process.env.ARTI_ADMIN_SESSION_TTL_HOURS || 12)
+const adminMaxAttempts = Math.max(1, Number(process.env.ARTI_ADMIN_MAX_ATTEMPTS || 5))
+const adminLockoutMinutes = Math.max(1, Number(process.env.ARTI_ADMIN_LOCKOUT_MINUTES || 15))
 const supabaseUrl = process.env.SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const tableName = process.env.SUPABASE_TILE_TABLE || 'tile_config'
 
+app.set('trust proxy', 1)
 app.use(helmet())
 app.use(cors({ origin: corsOrigin === '*' ? true : corsOrigin.split(',').map((value) => value.trim()) }))
 app.use(express.json({ limit: '2mb' }))
@@ -37,6 +40,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
     autoRefreshToken: false,
   },
 })
+
+const adminUnlockAttempts = new Map()
 
 function isValidTileConfig(config) {
   if (!config || typeof config !== 'object') {
@@ -119,6 +124,44 @@ function requireAdminSession(req, res, next) {
   return next()
 }
 
+function getUnlockAttemptKey(req) {
+  return req.ip || req.socket?.remoteAddress || 'unknown'
+}
+
+function getUnlockAttemptState(key) {
+  const current = adminUnlockAttempts.get(key)
+  if (!current) {
+    return { failures: 0, lockedUntil: 0 }
+  }
+
+  if (current.lockedUntil && current.lockedUntil <= Date.now()) {
+    adminUnlockAttempts.delete(key)
+    return { failures: 0, lockedUntil: 0 }
+  }
+
+  return current
+}
+
+function clearUnlockAttemptState(key) {
+  adminUnlockAttempts.delete(key)
+}
+
+function recordUnlockFailure(key) {
+  const current = getUnlockAttemptState(key)
+  const failures = current.failures + 1
+
+  if (failures >= adminMaxAttempts) {
+    const lockedUntil = Date.now() + adminLockoutMinutes * 60 * 1000
+    const nextState = { failures, lockedUntil }
+    adminUnlockAttempts.set(key, nextState)
+    return nextState
+  }
+
+  const nextState = { failures, lockedUntil: 0 }
+  adminUnlockAttempts.set(key, nextState)
+  return nextState
+}
+
 async function readStoredConfig() {
   const { data, error } = await supabase
     .from(tableName)
@@ -174,12 +217,37 @@ app.get('/api/tile-config', async (_req, res) => {
 })
 
 app.post('/api/admin/unlock', (req, res) => {
+  const attemptKey = getUnlockAttemptKey(req)
+  const attemptState = getUnlockAttemptState(attemptKey)
+
+  if (attemptState.lockedUntil > Date.now()) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((attemptState.lockedUntil - Date.now()) / 1000))
+    return res.status(429).json({
+      error: 'Too many attempts',
+      retryAfterSeconds,
+    })
+  }
+
   const pin = req.body?.pin
 
   if (!safeEqualText(pin, adminPin)) {
-    return res.status(401).json({ error: 'Unauthorized' })
+    const nextState = recordUnlockFailure(attemptKey)
+
+    if (nextState.lockedUntil > Date.now()) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((nextState.lockedUntil - Date.now()) / 1000))
+      return res.status(429).json({
+        error: 'Too many attempts',
+        retryAfterSeconds,
+      })
+    }
+
+    return res.status(401).json({
+      error: 'Unauthorized',
+      attemptsRemaining: Math.max(0, adminMaxAttempts - nextState.failures),
+    })
   }
 
+  clearUnlockAttemptState(attemptKey)
   const session = issueAdminToken()
   return res.json(session)
 })

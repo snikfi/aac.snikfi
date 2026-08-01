@@ -13,6 +13,7 @@ const STORAGE_KEY = 'arti-aac-tiles-v1'
 const ADMIN_PIN_MAX_LENGTH = 8
 const ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK = 5
 const ADMIN_UNLOCK_LOCKOUT_MINUTES_FALLBACK = 15
+const DEV_ADMIN_PIN = '0405'
 const TILE_BADGE_BACKGROUNDS = {
   subject: '#fdeaec',
   verb: '#fafdd9',
@@ -25,6 +26,14 @@ function formatDurationLabel(durationMs) {
   const seconds = totalSeconds % 60
 
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function isLocalDevAdminMode() {
+  if (!import.meta.env.DEV || typeof window === 'undefined') {
+    return false
+  }
+
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 }
 
 const DEFAULT_SUBJECTS = []
@@ -68,6 +77,10 @@ function makeBadgeImage(label, backgroundColor, foregroundColor = '#060606') {
   `
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
+function isGeneratedBadgeImage(image) {
+  return typeof image === 'string' && image.startsWith('data:image/svg+xml;charset=UTF-8,')
 }
 
 function getTileBadgeBackground(scope) {
@@ -729,6 +742,18 @@ function App() {
       return
     }
 
+    if (isLocalDevAdminMode() && pin === DEV_ADMIN_PIN) {
+      setPinError('')
+      setHasAdminAuth(true)
+      setAdminSessionExpiresAt(null)
+      setAdminUnlockLockedUntil(null)
+      setAdminFailedAttempts(0)
+      setIsPinOpen(false)
+      setIsAdminOpen(true)
+      setPinInput('')
+      return
+    }
+
     setPinError('')
     setIsUnlockingAdmin(true)
 
@@ -1367,7 +1392,12 @@ function App() {
                 className={`subject-tile ${subject?.id === item.id ? 'selected' : ''}`}
                 onClick={() => onSelectSubject(item)}
               >
-                <img src={item.image} alt="" aria-hidden="true" />
+                <img
+                  src={item.image}
+                  alt=""
+                  aria-hidden="true"
+                  className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                />
                 <span>{item.label}</span>
               </button>
             ))}
@@ -1384,7 +1414,12 @@ function App() {
                   className={`verb-tile ${verb?.id === item.id ? 'selected' : ''}`}
                   onClick={() => onSelectVerb(item)}
                 >
-                  <img src={item.image} alt="" aria-hidden="true" />
+                  <img
+                    src={item.image}
+                    alt=""
+                    aria-hidden="true"
+                    className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                  />
                   <span>{item.label}</span>
                 </button>
               ))}
@@ -1402,7 +1437,12 @@ function App() {
                   className={`ghost-tile ${objectWord?.id === item.id ? 'selected' : ''}`}
                   onClick={() => onSelectObject(item)}
                 >
-                  <img src={item.image} alt="" aria-hidden="true" />
+                  <img
+                    src={item.image}
+                    alt=""
+                    aria-hidden="true"
+                    className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                  />
                   <span>{item.label}</span>
                 </button>
               ))}
@@ -1605,7 +1645,11 @@ function App() {
                       }`}
                       aria-hidden="true"
                     >
-                      <img src={item.image} alt="" />
+                      <img
+                        src={item.image}
+                        alt=""
+                        className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                      />
                       <span>{item.label}</span>
                     </div>
                     <button
