@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  clearAdminSession,
   fetchRemoteTileConfig,
+  hasAdminSession,
   isRemoteSyncEnabled,
   saveRemoteTileConfig,
+  unlockAdminSession,
 } from './lib/tileConfigSync'
 import './App.css'
 
 const STORAGE_KEY = 'arti-aac-tiles-v1'
-const ADMIN_PIN = '0405'
 
 const DEFAULT_SUBJECTS = []
 
@@ -201,6 +203,8 @@ function App() {
   const [isPinOpen, setIsPinOpen] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
+  const [isUnlockingAdmin, setIsUnlockingAdmin] = useState(false)
+  const [hasAdminAuth, setHasAdminAuth] = useState(() => hasAdminSession())
   const [isAdminOpen, setIsAdminOpen] = useState(false)
   const [adminTab, setAdminTab] = useState('subject')
 
@@ -279,7 +283,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!hasHydratedSync || !isRemoteSyncEnabled()) {
+    if (!hasHydratedSync || !isRemoteSyncEnabled() || !hasAdminAuth) {
       return
     }
 
@@ -292,7 +296,15 @@ function App() {
           setLastSyncedAt(new Date())
           setSyncState('synced')
         })
-        .catch(() => {
+        .catch((error) => {
+          if (error instanceof Error && error.message === 'Admin session expired') {
+            setHasAdminAuth(false)
+            setIsAdminOpen(false)
+            setIsPinOpen(true)
+            setPinInput('')
+            setPinError('Session expired. Enter admin code again.')
+          }
+
           setSyncState('error')
         })
     }, 500)
@@ -300,7 +312,7 @@ function App() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [subjects, verbs, objectsByVerb, hasHydratedSync])
+  }, [subjects, verbs, objectsByVerb, hasHydratedSync, hasAdminAuth])
 
   useEffect(() => {
     if (!isSyncTipOpen) {
@@ -532,18 +544,36 @@ function App() {
     setIsPinOpen(true)
   }
 
-  const onSubmitPin = () => {
-    if (pinInput === ADMIN_PIN) {
-      setIsPinOpen(false)
-      setIsAdminOpen(true)
-      setPinError('')
+  const onSubmitPin = async () => {
+    const pin = pinInput.trim()
+    if (!pin) {
+      setPinError('Enter admin code')
       return
     }
 
-    setPinError('Incorrect code')
+    setPinError('')
+    setIsUnlockingAdmin(true)
+
+    try {
+      await unlockAdminSession(pin)
+      setHasAdminAuth(true)
+      setIsPinOpen(false)
+      setIsAdminOpen(true)
+      setPinInput('')
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Invalid admin code') {
+        setPinError('Incorrect code')
+      } else {
+        setPinError('Could not verify code. Try again.')
+      }
+    } finally {
+      setIsUnlockingAdmin(false)
+    }
   }
 
   const onCloseAdmin = () => {
+    clearAdminSession()
+    setHasAdminAuth(false)
     setIsAdminOpen(false)
     setAdminTab('subject')
     setRestoreDraft(null)
@@ -1179,8 +1209,8 @@ function App() {
             />
             {pinError && <p className="admin-error">{pinError}</p>}
             <div className="admin-pin-actions">
-              <button type="button" className="admin-btn" onClick={onSubmitPin}>
-                Unlock
+              <button type="button" className="admin-btn" onClick={onSubmitPin} disabled={isUnlockingAdmin}>
+                {isUnlockingAdmin ? 'Unlocking...' : 'Unlock'}
               </button>
               <button type="button" className="admin-btn ghost" onClick={() => setIsPinOpen(false)}>
                 Cancel

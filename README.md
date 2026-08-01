@@ -45,7 +45,14 @@ Before running the API, configure Supabase once:
 
 ```bash
 VITE_ARTI_SYNC_URL=http://localhost:8787
-VITE_ARTI_SYNC_TOKEN=replace-with-strong-token
+```
+
+5. In `server/.env`, set secure admin auth values:
+
+```bash
+ARTI_ADMIN_PIN=replace-with-long-random-pin
+ARTI_ADMIN_SESSION_SECRET=replace-with-long-random-secret
+ARTI_ADMIN_SESSION_TTL_HOURS=12
 ```
 
 5. In another terminal, start frontend:
@@ -64,7 +71,9 @@ Deploy two services:
 Required API environment variables:
 
 - `PORT`: API port (default `8787`)
-- `ARTI_SYNC_TOKEN`: shared token required for writes
+- `ARTI_ADMIN_PIN`: server-side PIN used to unlock admin actions
+- `ARTI_ADMIN_SESSION_SECRET`: secret used to sign admin session tokens
+- `ARTI_ADMIN_SESSION_TTL_HOURS`: optional admin token lifetime in hours (default `12`)
 - `CORS_ORIGIN`: frontend origin (for example `https://arti.example.com`)
 - `SUPABASE_URL`: Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
@@ -73,7 +82,6 @@ Required API environment variables:
 Required frontend environment variables:
 
 - `VITE_ARTI_SYNC_URL`: public URL of sync API
-- `VITE_ARTI_SYNC_TOKEN`: same token as API
 
 ## How Cross-Device Persistence Works
 
@@ -84,9 +92,9 @@ Required frontend environment variables:
 
 ## Security Notes
 
-- This setup is intentionally scoped to one user and uses a shared token.
+- Admin unlock verification happens on the server and returns a short-lived session token.
 - Use HTTPS in production.
-- Keep the token long and random.
+- Keep `ARTI_ADMIN_PIN` and `ARTI_ADMIN_SESSION_SECRET` long and random.
 - Restrict `CORS_ORIGIN` to your app domain.
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
 - Protect the API deployment with network controls if possible.

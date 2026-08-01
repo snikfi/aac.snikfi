@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 
 import { createClient } from '@supabase/supabase-js'
 import cors from 'cors'
@@ -9,7 +10,9 @@ const app = express()
 
 const port = Number(process.env.PORT || 8787)
 const corsOrigin = process.env.CORS_ORIGIN || '*'
-const syncToken = process.env.ARTI_SYNC_TOKEN || ''
+const adminPin = process.env.ARTI_ADMIN_PIN || ''
+const adminSessionSecret = process.env.ARTI_ADMIN_SESSION_SECRET || ''
+const adminSessionTtlHours = Number(process.env.ARTI_ADMIN_SESSION_TTL_HOURS || 12)
 const supabaseUrl = process.env.SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const tableName = process.env.SUPABASE_TILE_TABLE || 'tile_config'
@@ -20,6 +23,11 @@ app.use(express.json({ limit: '2mb' }))
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables')
+  process.exit(1)
+}
+
+if (!adminPin || !adminSessionSecret) {
+  console.error('Missing ARTI_ADMIN_PIN or ARTI_ADMIN_SESSION_SECRET environment variables')
   process.exit(1)
 }
 
@@ -46,17 +54,69 @@ function isValidTileConfig(config) {
   return true
 }
 
-function requireSyncToken(req, res, next) {
-  if (!syncToken) {
-    return next()
+function safeEqualText(left, right) {
+  const leftBuffer = Buffer.from(String(left))
+  const rightBuffer = Buffer.from(String(right))
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false
   }
 
-  const incomingToken = req.header('x-arti-sync-token')
-  if (incomingToken && incomingToken === syncToken) {
-    return next()
+  return timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+function signTokenPayload(encodedPayload) {
+  return createHmac('sha256', adminSessionSecret).update(encodedPayload).digest('base64url')
+}
+
+function issueAdminToken() {
+  const expiresInSeconds = Math.max(1, Math.floor(adminSessionTtlHours * 60 * 60))
+  const payload = {
+    exp: Date.now() + expiresInSeconds * 1000,
   }
 
-  return res.status(401).json({ error: 'Unauthorized' })
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const signature = signTokenPayload(encodedPayload)
+
+  return {
+    token: `${encodedPayload}.${signature}`,
+    expiresInSeconds,
+  }
+}
+
+function verifyAdminToken(token) {
+  if (!token || typeof token !== 'string') {
+    return false
+  }
+
+  const [encodedPayload, incomingSignature] = token.split('.')
+  if (!encodedPayload || !incomingSignature) {
+    return false
+  }
+
+  const expectedSignature = signTokenPayload(encodedPayload)
+  if (!safeEqualText(incomingSignature, expectedSignature)) {
+    return false
+  }
+
+  try {
+    const payloadRaw = Buffer.from(encodedPayload, 'base64url').toString('utf8')
+    const payload = JSON.parse(payloadRaw)
+    return Number(payload?.exp) > Date.now()
+  } catch {
+    return false
+  }
+}
+
+function requireAdminSession(req, res, next) {
+  const authorization = req.header('authorization') || ''
+  const [scheme, token] = authorization.split(' ')
+
+  if (scheme !== 'Bearer' || !verifyAdminToken(token)) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  return next()
 }
 
 async function readStoredConfig() {
@@ -113,7 +173,18 @@ app.get('/api/tile-config', async (_req, res) => {
   }
 })
 
-app.put('/api/tile-config', requireSyncToken, async (req, res) => {
+app.post('/api/admin/unlock', (req, res) => {
+  const pin = req.body?.pin
+
+  if (!safeEqualText(pin, adminPin)) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  const session = issueAdminToken()
+  return res.json(session)
+})
+
+app.put('/api/tile-config', requireAdminSession, async (req, res) => {
   const config = req.body?.config
 
   if (!isValidTileConfig(config)) {

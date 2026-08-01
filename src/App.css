@@ -405,11 +405,12 @@
 }
 
 .admin-restore-modal {
-  margin-top: 10px;
+  width: min(380px, calc(100vw - 24px));
   border: 1px solid #d8d9de;
   border-radius: 12px;
   padding: 12px;
-  background: #f7f9ff;
+  background: #ffffff;
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.24);
 }
 
 .admin-restore-modal h3 {
@@ -425,6 +426,88 @@
 .admin-restore-actions {
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-export-modal {
+  width: min(380px, calc(100vw - 24px));
+  border: 1px solid #d5e3fb;
+  border-radius: 12px;
+  padding: 14px;
+  background: #ffffff;
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.24);
+}
+
+.admin-export-modal h3 {
+  margin: 0 0 8px;
+  color: #1d1f24;
+}
+
+.admin-export-modal p {
+  margin: 0 0 12px;
+  color: #2f3340;
+}
+
+.admin-export-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-export-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgb(7 8 12 / 0.48);
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+
+.admin-restore-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 72;
+  background: rgb(7 8 12 / 0.48);
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+
+.admin-delete-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 75;
+  width: min(360px, calc(100vw - 24px));
+  border-radius: 12px;
+  border: 1px solid #e2d4d4;
+  background: #ffffff;
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.24);
+  padding: 14px;
+}
+
+.admin-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 74;
+  background: rgb(7 8 12 / 0.48);
+}
+
+.admin-delete-modal h3 {
+  margin: 0 0 8px;
+  color: #1d1f24;
+}
+
+.admin-delete-modal p {
+  margin: 0 0 12px;
+  color: #2f3340;
+}
+
+.admin-delete-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .admin-tabs {
