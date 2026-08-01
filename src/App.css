@@ -336,10 +336,58 @@
   font: inherit;
 }
 
+.admin-pin-display {
+  min-height: 52px;
+  border: 1px solid #d8d9de;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fc;
+  color: #121315;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.admin-pin-pad {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-pin-key {
+  min-height: 58px;
+  border: 1px solid #d8d9de;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #121315;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-pin-key-alt {
+  font-size: 16px;
+}
+
+.admin-pin-key:disabled,
+.admin-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .admin-pin-actions {
   margin-top: 12px;
   display: flex;
   gap: 8px;
+}
+
+.admin-pin-actions .admin-btn {
+  flex: 1;
 }
 
 .admin-btn {

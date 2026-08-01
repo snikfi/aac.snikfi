@@ -10,6 +10,7 @@ import {
 import './App.css'
 
 const STORAGE_KEY = 'arti-aac-tiles-v1'
+const ADMIN_PIN_MAX_LENGTH = 8
 
 const DEFAULT_SUBJECTS = []
 
@@ -542,6 +543,27 @@ function App() {
     setPinInput('')
     setPinError('')
     setIsPinOpen(true)
+  }
+
+  const onAppendPinDigit = (digit) => {
+    setPinError('')
+    setPinInput((current) => {
+      if (current.length >= ADMIN_PIN_MAX_LENGTH) {
+        return current
+      }
+
+      return `${current}${digit}`
+    })
+  }
+
+  const onDeletePinDigit = () => {
+    setPinError('')
+    setPinInput((current) => current.slice(0, -1))
+  }
+
+  const onClearPin = () => {
+    setPinError('')
+    setPinInput('')
   }
 
   const onSubmitPin = async () => {
@@ -1200,16 +1222,47 @@ function App() {
         <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Admin code">
           <div className="admin-pin-card">
             <h2>Enter admin code</h2>
-            <input
-              type="password"
-              value={pinInput}
-              onChange={(event) => setPinInput(event.target.value)}
-              placeholder="Code"
-              maxLength={8}
-            />
+            <div className="admin-pin-display" aria-live="polite" aria-label={`Code length ${pinInput.length} of ${ADMIN_PIN_MAX_LENGTH}`}>
+              {pinInput ? '●'.repeat(pinInput.length) : 'Enter code'}
+            </div>
+            <div className="admin-pin-pad" aria-label="Admin code keypad">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  type="button"
+                  className="admin-pin-key"
+                  onClick={() => onAppendPinDigit(digit)}
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="admin-pin-key admin-pin-key-alt"
+                onClick={onClearPin}
+                disabled={!pinInput}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="admin-pin-key"
+                onClick={() => onAppendPinDigit('0')}
+              >
+                0
+              </button>
+              <button
+                type="button"
+                className="admin-pin-key admin-pin-key-alt"
+                onClick={onDeletePinDigit}
+                disabled={!pinInput}
+              >
+                Delete
+              </button>
+            </div>
             {pinError && <p className="admin-error">{pinError}</p>}
             <div className="admin-pin-actions">
-              <button type="button" className="admin-btn" onClick={onSubmitPin} disabled={isUnlockingAdmin}>
+              <button type="button" className="admin-btn" onClick={onSubmitPin} disabled={isUnlockingAdmin || !pinInput}>
                 {isUnlockingAdmin ? 'Unlocking...' : 'Unlock'}
               </button>
               <button type="button" className="admin-btn ghost" onClick={() => setIsPinOpen(false)}>
