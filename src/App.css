@@ -231,9 +231,9 @@
 }
 
 .lock-tile.unlocked {
-  background: #d7f6ce;
-  border-color: #b8d9bf;
-  color: #114a1a;
+  background: #393939;
+  border-color: #5d6b60;
+  color: #d8f4d6;
 }
 
 .lock-tile-icon {
@@ -243,11 +243,11 @@
 
 .sync-rail-btn {
   position: relative;
-  border: 1px solid #dceec7;
+  border: 1px solid #5f6a64;
   border-radius: 16px;
   min-height: 64px;
-  background: #d7f6ce;
-  color: #114a1a;
+  background: #4d5552;
+  color: #d8f1e2;
   display: flex;
   align-items: center;
   justify-content: center;
