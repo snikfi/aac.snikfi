@@ -277,6 +277,7 @@ function App() {
   const [objectVerbId, setObjectVerbId] = useState(verbs[0]?.id || '')
   const [newTileName, setNewTileName] = useState('')
   const [newTileImage, setNewTileImage] = useState('')
+  const [adminSearchQuery, setAdminSearchQuery] = useState('')
   const [syncState, setSyncState] = useState(
     isRemoteSyncEnabled() ? 'connecting' : 'local-only',
   )
@@ -1359,6 +1360,19 @@ function App() {
 
   const adminTiles =
     adminTab === 'subject' ? subjects : adminTab === 'verb' ? verbs : adminObjectTiles
+  const adminTabLabel = adminTab === 'subject' ? 'subject' : adminTab === 'verb' ? 'verb' : 'object'
+  const subjectTileCount = subjects.length
+  const verbTileCount = verbs.length
+  const objectTileCount = Object.values(objectsByVerb).reduce(
+    (total, list) => total + (Array.isArray(list) ? list.length : 0),
+    0,
+  )
+  const normalizedAdminSearch = adminSearchQuery.trim().toLowerCase()
+  const visibleAdminTiles = normalizedAdminSearch
+    ? adminTiles
+        .map((item, sourceIndex) => ({ item, sourceIndex }))
+        .filter(({ item }) => item.label.toLowerCase().includes(normalizedAdminSearch))
+    : adminTiles.map((item, sourceIndex) => ({ item, sourceIndex }))
 
   const mobileStepClass = !subject ? 'step-subject' : !verb ? 'step-verb' : 'step-object'
   const boardModeClass = isThreeStepMode ? mobileStepClass : 'mode-free'
@@ -1761,9 +1775,16 @@ function App() {
         <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Tile admin">
           <section className="admin-panel">
             <header className="admin-header">
-              <div>
+              <div className="admin-title-row">
                 <h2>Tile Admin</h2>
-                <p className="admin-session-status">{adminStatusMessage}</p>
+                <span
+                  className={`admin-session-icon ${hasAdminAuth ? 'unlocked' : 'locked'}`}
+                  role="img"
+                  aria-label={adminStatusMessage}
+                  title={adminStatusMessage}
+                >
+                  {hasAdminAuth ? '🔓' : '🔒'}
+                </span>
               </div>
               <div className="admin-header-actions">
                 <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
@@ -1783,8 +1804,8 @@ function App() {
                 <button type="button" className="admin-btn ghost" onClick={onLockAdmin}>
                   Lock admin
                 </button>
-                <button type="button" className="admin-btn ghost" onClick={onCloseAdmin}>
-                  Close
+                <button type="button" className="admin-close-icon" onClick={onCloseAdmin} aria-label="Close Tile Admin">
+                  ✕
                 </button>
               </div>
             </header>
@@ -1801,21 +1822,30 @@ function App() {
                 className={`admin-tab ${adminTab === 'subject' ? 'active' : ''}`}
                 onClick={() => setAdminTab('subject')}
               >
-                Subject
+                <span>Subject</span>
+                <span className="admin-tab-badge subject" aria-label={`${subjectTileCount} subject tiles`}>
+                  {subjectTileCount}
+                </span>
               </button>
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'verb' ? 'active' : ''}`}
                 onClick={() => setAdminTab('verb')}
               >
-                Verb
+                <span>Verb</span>
+                <span className="admin-tab-badge verb" aria-label={`${verbTileCount} verb tiles`}>
+                  {verbTileCount}
+                </span>
               </button>
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'object' ? 'active' : ''}`}
                 onClick={() => setAdminTab('object')}
               >
-                Object
+                <span>Object</span>
+                <span className="admin-tab-badge object" aria-label={`${objectTileCount} object tiles`}>
+                  {objectTileCount}
+                </span>
               </button>
             </div>
 
@@ -1858,20 +1888,30 @@ function App() {
               </button>
             </div>
 
+            <label className="admin-search-row">
+              <span>Search tiles</span>
+              <input
+                type="search"
+                value={adminSearchQuery}
+                onChange={(event) => setAdminSearchQuery(event.target.value)}
+                placeholder="Search by tile name"
+              />
+            </label>
+
             <div className="admin-list">
-              {adminTiles.map((item, index) => (
+              {visibleAdminTiles.map(({ item, sourceIndex }) => (
                 <article
-                  key={item.id}
+                  key={`${item.id}-${sourceIndex}`}
                   className={`admin-item ${
-                    dragState.active && dragState.fromIndex === index && dragState.scope === adminTab
+                    dragState.active && dragState.fromIndex === sourceIndex && dragState.scope === adminTab
                       ? 'dragging'
                       : ''
                   } ${
-                    dragState.active && dragState.overIndex === index && dragState.scope === adminTab
+                    dragState.active && dragState.overIndex === sourceIndex && dragState.scope === adminTab
                       ? 'drop-target'
                       : ''
                   }`}
-                  data-admin-item-index={index}
+                  data-admin-item-index={sourceIndex}
                 >
                   <div className="admin-item-media">
                     <div
@@ -1894,7 +1934,7 @@ function App() {
                     <button
                       type="button"
                       className="admin-media-btn admin-media-drag admin-drag-handle"
-                      onPointerDown={(event) => onStartDragTile(adminTab, index, event)}
+                      onPointerDown={(event) => onStartDragTile(adminTab, sourceIndex, event)}
                       aria-label={`Drag to reorder ${item.label}`}
                     >
                       ↕
@@ -1902,7 +1942,7 @@ function App() {
                     <button
                       type="button"
                       className="admin-media-btn admin-media-delete"
-                      onClick={() => onRequestDeleteTile(adminTab, item, index)}
+                      onClick={() => onRequestDeleteTile(adminTab, item, sourceIndex)}
                       aria-label={`Delete ${item.label}`}
                     >
                       <svg
@@ -1942,21 +1982,21 @@ function App() {
                     <button
                       type="button"
                       className="admin-btn ghost"
-                      onClick={() => onReorderTile(adminTab, index, -1)}
+                      onClick={() => onReorderTile(adminTab, sourceIndex, -1)}
                     >
                       Up
                     </button>
                     <button
                       type="button"
                       className="admin-btn ghost"
-                      onClick={() => onReorderTile(adminTab, index, 1)}
+                      onClick={() => onReorderTile(adminTab, sourceIndex, 1)}
                     >
                       Down
                     </button>
                     <button
                       type="button"
                       className="admin-btn ghost"
-                      onClick={() => onDuplicateTile(adminTab, item, index)}
+                      onClick={() => onDuplicateTile(adminTab, item, sourceIndex)}
                     >
                       Duplicate
                     </button>
@@ -1964,6 +2004,14 @@ function App() {
                 </article>
               ))}
             </div>
+
+            {visibleAdminTiles.length === 0 && (
+              <p className="admin-empty-state" role="status" aria-live="polite">
+                {normalizedAdminSearch
+                  ? `No ${adminTabLabel} tiles found for "${adminSearchQuery.trim()}".`
+                  : `No ${adminTabLabel} tiles found.`}
+              </p>
+            )}
           </section>
 
           {(deletedToasts.length > 0 || createdToasts.length > 0) && (
