@@ -31,6 +31,12 @@ function getHeaders(includeAdminAuth = false) {
   return headers
 }
 
+function createAdminUnlockError(message, details = {}) {
+  const error = new Error(message)
+  Object.assign(error, details)
+  return error
+}
+
 export function clearAdminSession() {
   adminSessionToken = ''
 }
@@ -52,8 +58,20 @@ export async function unlockAdminSession(pin) {
     }),
   )
 
-  if (response.status === 401) {
-    throw new Error('Invalid admin code')
+  if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+    const payload = await response.json().catch(() => null)
+    throw createAdminUnlockError('Invalid admin code', {
+      code: 'INVALID_ADMIN_CODE',
+      attemptsRemaining: payload?.attemptsRemaining,
+    })
+  }
+
+  if (response.status === 429) {
+    const payload = await response.json().catch(() => null)
+    throw createAdminUnlockError('Admin unlock temporarily locked', {
+      code: 'ADMIN_UNLOCK_LOCKED',
+      retryAfterSeconds: payload?.retryAfterSeconds,
+    })
   }
 
   if (!response.ok) {
