@@ -1096,7 +1096,7 @@ function App() {
       }))
     } else if (adminTab === 'quick') {
       if (quickWords.length >= QUICK_WORD_SLOT_COUNT) {
-        setNewTileNameError(`Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items.`)
+        setNewTileNameError(`Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items. Update or delete a tile below to create a new quick tile.`)
         return
       }
 
@@ -1329,6 +1329,7 @@ function App() {
     if (scope === 'quick') {
       setDeletedToasts((current) => [...current, createDeletedToast({ scope, tile, index })])
       setQuickWords((current) => current.filter((item) => item.id !== tile.id))
+      setNewTileNameError('')
     }
   }
 
@@ -2099,7 +2100,7 @@ function App() {
                 onClick={() => setAdminTab('quick')}
               >
                 <span>Quick tiles</span>
-                <span className="admin-tab-badge object" aria-label={`${quickTileCount} quick tiles`}>
+                <span className="admin-tab-badge quick" aria-label={`${quickTileCount} quick tiles`}>
                   {quickTileCount}
                 </span>
               </button>
@@ -2128,6 +2129,12 @@ function App() {
               </>
             )}
 
+            {adminTab === 'quick' && (
+              <div className="admin-object-help" role="note" aria-live="polite">
+                <p>Quick tiles are your fast-access words or phrases shown in the side rail for one-tap speaking. There are 5 slots available.</p>
+              </div>
+            )}
+
             <>
               <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
                 <h3>{createTileTitle}</h3>
@@ -2146,7 +2153,7 @@ function App() {
                       placeholder="Tile name"
                       aria-invalid={Boolean(newTileNameError)}
                     />
-                    {newTileNameError && <p className="admin-inline-error">{newTileNameError}</p>}
+                    {newTileNameError && <p className="admin-inline-error" role="alert">{newTileNameError}</p>}
                     {newTileImage && (
                       <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
                     )}
@@ -2167,12 +2174,6 @@ function App() {
 
               <div className="admin-section-divider" aria-hidden="true" />
             </>
-
-            {adminTab === 'quick' && (
-              <div className="admin-object-help" role="note" aria-live="polite">
-                <p>Quick tiles support up to 5 items. Delete a quick tile to make room for a new one.</p>
-              </div>
-            )}
 
             <label className="admin-search-row">
               <span>{searchTileTitle}</span>

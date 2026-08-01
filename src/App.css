@@ -770,6 +770,10 @@
   background: #d9f2ff;
 }
 
+.admin-tab-badge.quick {
+  background: #ffe6c2;
+}
+
 .admin-tab.active .admin-tab-badge.subject {
   background: #ebcbcb;
 }
@@ -780,6 +784,10 @@
 
 .admin-tab.active .admin-tab-badge.object {
   background: #a7d9cb;
+}
+
+.admin-tab.active .admin-tab-badge.quick {
+  background: #ffd39a;
 }
 
 .admin-row {
@@ -817,9 +825,14 @@
 }
 
 .admin-inline-error {
-  margin: -2px 0 0;
-  color: #a1182a;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #e9a1ac;
+  border-radius: 10px;
+  background: #fff1f3;
+  color: #8f1024;
   font-size: 12px;
+  line-height: 1.35;
   font-weight: 700;
 }
 
