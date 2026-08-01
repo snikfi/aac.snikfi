@@ -253,6 +253,7 @@ function App() {
   const [verb, setVerb] = useState(null)
   const [objectWord, setObjectWord] = useState(null)
   const [lastSpoken, setLastSpoken] = useState('')
+  const [isThreeStepMode, setIsThreeStepMode] = useState(true)
 
   const [isPinOpen, setIsPinOpen] = useState(false)
   const [pinInput, setPinInput] = useState('')
@@ -566,12 +567,21 @@ function App() {
   }, [isPinOpen, isUnlockingAdmin, pinInput, isAdminUnlockLocked])
 
   const objectOptions = useMemo(() => {
-    if (!verb) {
-      return []
+    if (isThreeStepMode) {
+      if (!verb) {
+        return []
+      }
+
+      return objectsByVerb[verb.id] || []
     }
 
-    return objectsByVerb[verb.id] || []
-  }, [verb, objectsByVerb])
+    return verbs.flatMap((verbItem) =>
+      (objectsByVerb[verbItem.id] || []).map((item) => ({
+        ...item,
+        __sourceKey: `${verbItem.id}:${item.id}`,
+      })),
+    )
+  }, [isThreeStepMode, objectsByVerb, verb, verbs])
 
   const adminObjectTiles = useMemo(() => {
     if (!objectVerbId) {
@@ -701,8 +711,12 @@ function App() {
 
   const onSelectSubject = (item) => {
     setSubject(item)
-    setVerb(null)
-    setObjectWord(null)
+
+    if (isThreeStepMode) {
+      setVerb(null)
+      setObjectWord(null)
+    }
+
     speakText(item.label)
     setLastSpoken(item.label)
   }
@@ -1277,10 +1291,16 @@ function App() {
     adminTab === 'subject' ? subjects : adminTab === 'verb' ? verbs : adminObjectTiles
 
   const mobileStepClass = !subject ? 'step-subject' : !verb ? 'step-verb' : 'step-object'
+  const boardModeClass = isThreeStepMode ? mobileStepClass : 'mode-free'
+  const isVerbColumnActive = !isThreeStepMode || Boolean(subject)
+  const isObjectColumnActive = !isThreeStepMode || Boolean(verb)
 
   const onSelectVerb = (item) => {
     setVerb(item)
-    setObjectWord(null)
+
+    if (isThreeStepMode) {
+      setObjectWord(null)
+    }
 
     if (subject) {
       const phrase = `${subject.label} ${item.label.toLowerCase()}`
@@ -1296,8 +1316,9 @@ function App() {
   const onSelectObject = (item) => {
     setObjectWord(item)
     const phrase = enhanceSentence(subject, verb, item)
-    speakText(phrase)
-    setLastSpoken(phrase)
+    const spoken = phrase || item.label
+    speakText(spoken)
+    setLastSpoken(spoken)
   }
 
   const onQuickWord = (item) => {
@@ -1381,7 +1402,7 @@ function App() {
         </div>
       </header>
 
-      <section className={`board-layout ${mobileStepClass}`} aria-label="AAC communication grid">
+      <section className={`board-layout ${boardModeClass}`} aria-label="AAC communication grid">
         <aside className="side-rail" aria-label="quick words">
           {QUICK_WORDS.map((item) => (
             <button
@@ -1395,6 +1416,14 @@ function App() {
             </button>
           ))}
           <div className="side-rail-bottom">
+            <button
+              type="button"
+              className={`mode-rail-btn ${isThreeStepMode ? 'three-step' : 'free'}`}
+              onClick={() => setIsThreeStepMode((current) => !current)}
+              aria-label={isThreeStepMode ? 'Disable 3-step mode' : 'Enable 3-step mode'}
+            >
+              <span className="mode-rail-label">{isThreeStepMode ? '3-step mode' : 'free mode'}</span>
+            </button>
             <button
               ref={syncTipRef}
               type="button"
@@ -1446,8 +1475,8 @@ function App() {
           </div>
         </article>
 
-        <article className={`verb-column ${subject ? 'active' : 'empty'}`} aria-label="Verb column">
-          {subject && (
+        <article className={`verb-column ${isVerbColumnActive ? 'active' : 'empty'}`} aria-label="Verb column">
+          {isVerbColumnActive && (
             <div className="verb-grid">
               {verbs.map((item) => (
                 <button
@@ -1469,18 +1498,26 @@ function App() {
           )}
         </article>
 
-        <article className={`object-column ${verb ? 'active' : 'empty'}`} aria-label="Object column">
-          {verb && (
+        <article className={`object-column ${isObjectColumnActive ? 'active' : 'empty'}`} aria-label="Object column">
+          {isObjectColumnActive && (
             <div className="object-grid">
               {objectOptions.map((item) => (
                 <button
-                  key={item.id}
+                  key={item.__sourceKey || item.id}
                   type="button"
-                  className={`ghost-tile ${objectWord?.id === item.id ? 'selected' : ''}`}
+                  className={`ghost-tile ${
+                    objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id)
+                      ? 'selected'
+                      : ''
+                  }`}
                   onClick={() => onSelectObject(item)}
                 >
                   <img
-                    src={getTileDisplayImage(item, 'object', objectWord?.id === item.id)}
+                    src={getTileDisplayImage(
+                      item,
+                      'object',
+                      objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id),
+                    )}
                     alt=""
                     aria-hidden="true"
                     className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}

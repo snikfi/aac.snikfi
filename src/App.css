@@ -254,6 +254,32 @@
   cursor: pointer;
 }
 
+.mode-rail-btn {
+  border: 1px solid #6a6a6a;
+  border-radius: 16px;
+  min-height: 64px;
+  background: #555555;
+  color: #f2f2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.mode-rail-btn.free {
+  border-color: #607d74;
+  background: #4e5f5a;
+  color: #d8f1e2;
+}
+
+.mode-rail-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
 .sync-rail-btn.tone-error {
   border-color: #6c6a61;
   background: #5c5a53;
@@ -640,6 +666,33 @@
   box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
 }
 
+.admin-undo-toast-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-undo-toast .admin-btn.ghost {
+  border: 1px solid #9fb7f1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1a3d8f;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.admin-toast-close {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #c9d6f7;
+  border-radius: 999px;
+  background: #f6f9ff;
+  color: #223b77;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .admin-toast-success {
   border-color: #b8d9bf;
   background: #eaf8ec;
@@ -931,6 +984,16 @@ button:focus-visible {
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .board-layout.mode-free .subject-panel,
+  .board-layout.mode-free .verb-column,
+  .board-layout.mode-free .object-column {
+    display: block;
+    height: auto;
+    min-height: 0;
+    align-self: stretch;
+    overflow-y: visible;
   }
 
   .side-rail {
