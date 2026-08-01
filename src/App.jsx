@@ -85,7 +85,11 @@ function makeBadgeImage(label, backgroundColor, foregroundColor = '#060606') {
 }
 
 function isGeneratedBadgeImage(image) {
-  return typeof image === 'string' && image.startsWith('data:image/svg+xml;charset=UTF-8,')
+  if (typeof image !== 'string') {
+    return false
+  }
+
+  return /^data:image\/svg\+xml(?:;charset=[^,]+)?,/i.test(image)
 }
 
 function getTileBadgeBackground(scope) {
@@ -893,16 +897,30 @@ function App() {
   }
 
   const onEditTile = (scope, id, field, value) => {
+    const applyEdit = (item) => {
+      if (item.id !== id) {
+        return item
+      }
+
+      const nextItem = { ...item, [field]: value }
+
+      if (field === 'label' && isGeneratedBadgeImage(item.image)) {
+        nextItem.image = makeBadgeImage(value, getTileBadgeBackground(scope))
+      }
+
+      return nextItem
+    }
+
     if (scope === 'subject') {
       setSubjects((current) =>
-        current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+        current.map((item) => applyEdit(item)),
       )
       return
     }
 
     if (scope === 'verb') {
       setVerbs((current) =>
-        current.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+        current.map((item) => applyEdit(item)),
       )
       return
     }
@@ -910,9 +928,7 @@ function App() {
     if (scope === 'object' && objectVerbId) {
       setObjectsByVerb((current) => ({
         ...current,
-        [objectVerbId]: (current[objectVerbId] || []).map((item) =>
-          item.id === id ? { ...item, [field]: value } : item,
-        ),
+        [objectVerbId]: (current[objectVerbId] || []).map((item) => applyEdit(item)),
       }))
     }
   }
