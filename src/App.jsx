@@ -254,6 +254,13 @@ function App() {
   const [objectWord, setObjectWord] = useState(null)
   const [lastSpoken, setLastSpoken] = useState('')
   const [isThreeStepMode, setIsThreeStepMode] = useState(true)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    return window.matchMedia('(max-width: 980px)').matches
+  })
 
   const [isPinOpen, setIsPinOpen] = useState(false)
   const [pinInput, setPinInput] = useState('')
@@ -275,6 +282,8 @@ function App() {
   )
   const [isSyncTipOpen, setIsSyncTipOpen] = useState(false)
   const syncTipRef = useRef(null)
+  const topStripRef = useRef(null)
+  const [mobileTopStripHeight, setMobileTopStripHeight] = useState(104)
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
@@ -565,6 +574,50 @@ function App() {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [isPinOpen, isUnlockingAdmin, pinInput, isAdminUnlockLocked])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const media = window.matchMedia('(max-width: 980px)')
+    const onMediaChange = () => setIsMobileViewport(media.matches)
+    onMediaChange()
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', onMediaChange)
+      return () => media.removeEventListener('change', onMediaChange)
+    }
+
+    media.addListener(onMediaChange)
+    return () => media.removeListener(onMediaChange)
+  }, [])
+
+  useEffect(() => {
+    const element = topStripRef.current
+    if (!element) {
+      return undefined
+    }
+
+    const updateHeight = () => {
+      setMobileTopStripHeight(Math.ceil(element.getBoundingClientRect().height))
+    }
+
+    updateHeight()
+
+    let observer = null
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(updateHeight)
+      observer.observe(element)
+    }
+
+    window.addEventListener('resize', updateHeight)
+
+    return () => {
+      window.removeEventListener('resize', updateHeight)
+      observer?.disconnect()
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -1310,6 +1363,7 @@ function App() {
   const mobileStepClass = !subject ? 'step-subject' : !verb ? 'step-verb' : 'step-object'
   const boardModeClass = isThreeStepMode ? mobileStepClass : 'mode-free'
   const shellModeClass = isThreeStepMode ? 'mode-three-step' : 'mode-free'
+  const isMobileFreeModeLayout = !isThreeStepMode && isMobileViewport
   const isVerbColumnActive = !isThreeStepMode || Boolean(subject)
   const isObjectColumnActive = !isThreeStepMode || Boolean(verb)
 
@@ -1379,9 +1433,66 @@ function App() {
     }
   }
 
+  const sideRail = (
+    <aside className="side-rail" aria-label="quick words">
+      {QUICK_WORDS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className="side-tile"
+          onClick={() => onQuickWord(item)}
+        >
+          <img src={item.image} alt="" aria-hidden="true" />
+          <span>{item.label}</span>
+        </button>
+      ))}
+      <div className="side-rail-bottom">
+        <button
+          type="button"
+          className={`mode-rail-btn ${isThreeStepMode ? 'three-step' : 'free'}`}
+          onClick={() => setIsThreeStepMode((current) => !current)}
+          aria-label={isThreeStepMode ? 'Disable 3-step mode' : 'Enable 3-step mode'}
+        >
+          <span className="mode-rail-label">{isThreeStepMode ? '3-step mode' : 'free mode'}</span>
+        </button>
+        <button
+          ref={syncTipRef}
+          type="button"
+          className={`sync-rail-btn tone-${syncTone} ${isSyncTipOpen ? 'open' : ''}`}
+          aria-label={syncMessage}
+          aria-live="polite"
+          aria-expanded={isSyncTipOpen}
+          onClick={() => setIsSyncTipOpen((current) => !current)}
+        >
+          <span className="sync-rail-icon" aria-hidden="true">
+            {syncTone === 'ok' ? '☁︎' : '⚠'}
+          </span>
+          <span className="sync-rail-tooltip" role="status">
+            <span className="sync-tip-title">{syncMessage}</span>
+            <span className="sync-tip-time">{syncDetailMessage}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`lock-tile ${hasAdminAuth ? 'unlocked' : ''}`}
+          aria-label={hasAdminAuth ? 'Admin unlocked' : 'Admin locked'}
+          onClick={onOpenPin}
+        >
+          <span className="lock-tile-icon" aria-hidden="true">
+            {hasAdminAuth ? '🔓' : '🔒'}
+          </span>
+        </button>
+      </div>
+    </aside>
+  )
+
   return (
-    <main className={`figma-shell ${shellModeClass}`} data-node-id="1:59">
-      <header className="top-strip">
+    <main
+      className={`figma-shell ${shellModeClass} ${isMobileFreeModeLayout ? 'mobile-free-mode-layout' : ''}`}
+      data-node-id="1:59"
+      style={{ '--mobile-top-strip-height': `${mobileTopStripHeight}px` }}
+    >
+      <header ref={topStripRef} className="top-strip">
         <div className="top-left-group">
           <div className="top-left">
             {topSelections.map((item) => (
@@ -1420,91 +1531,99 @@ function App() {
         </div>
       </header>
 
-      <section className={`board-layout ${boardModeClass}`} aria-label="AAC communication grid">
-        <aside className="side-rail" aria-label="quick words">
-          {QUICK_WORDS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="side-tile"
-              onClick={() => onQuickWord(item)}
-            >
-              <img src={item.image} alt="" aria-hidden="true" />
-              <span>{item.label}</span>
-            </button>
-          ))}
-          <div className="side-rail-bottom">
-            <button
-              type="button"
-              className={`mode-rail-btn ${isThreeStepMode ? 'three-step' : 'free'}`}
-              onClick={() => setIsThreeStepMode((current) => !current)}
-              aria-label={isThreeStepMode ? 'Disable 3-step mode' : 'Enable 3-step mode'}
-            >
-              <span className="mode-rail-label">{isThreeStepMode ? '3-step mode' : 'free mode'}</span>
-            </button>
-            <button
-              ref={syncTipRef}
-              type="button"
-              className={`sync-rail-btn tone-${syncTone} ${isSyncTipOpen ? 'open' : ''}`}
-              aria-label={syncMessage}
-              aria-live="polite"
-              aria-expanded={isSyncTipOpen}
-              onClick={() => setIsSyncTipOpen((current) => !current)}
-            >
-              <span className="sync-rail-icon" aria-hidden="true">
-                {syncTone === 'ok' ? '☁︎' : '⚠'}
-              </span>
-              <span className="sync-rail-tooltip" role="status">
-                <span className="sync-tip-title">{syncMessage}</span>
-                <span className="sync-tip-time">{syncDetailMessage}</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              className={`lock-tile ${hasAdminAuth ? 'unlocked' : ''}`}
-              aria-label={hasAdminAuth ? 'Admin unlocked' : 'Admin locked'}
-              onClick={onOpenPin}
-            >
-              <span className="lock-tile-icon" aria-hidden="true">
-                {hasAdminAuth ? '🔓' : '🔒'}
-              </span>
-            </button>
+      {isMobileFreeModeLayout ? (
+        <>
+          <div className="mobile-free-fixed-rail">
+            {sideRail}
           </div>
-        </aside>
+          <section className="mobile-free-content" aria-label="AAC communication grid">
+            <article className="subject-panel mobile-free-panel">
+              <div className="subject-grid">
+                {subjects.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`subject-tile ${subject?.id === item.id ? 'selected' : ''}`}
+                    onClick={() => onSelectSubject(item)}
+                  >
+                    <img
+                      src={getTileDisplayImage(item, 'subject', subject?.id === item.id)}
+                      alt=""
+                      aria-hidden="true"
+                      className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </article>
 
-        <article className="subject-panel">
-          <div className="subject-grid">
-            {subjects.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`subject-tile ${subject?.id === item.id ? 'selected' : ''}`}
-                onClick={() => onSelectSubject(item)}
-              >
-                <img
-                  src={getTileDisplayImage(item, 'subject', subject?.id === item.id)}
-                  alt=""
-                  aria-hidden="true"
-                  className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
-                />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </article>
+            <article className="verb-column active mobile-free-panel" aria-label="Verb column">
+              <div className="verb-grid">
+                {verbs.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`verb-tile ${verb?.id === item.id ? 'selected' : ''}`}
+                    onClick={() => onSelectVerb(item)}
+                  >
+                    <img
+                      src={getTileDisplayImage(item, 'verb', verb?.id === item.id)}
+                      alt=""
+                      aria-hidden="true"
+                      className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </article>
 
-        <article className={`verb-column ${isVerbColumnActive ? 'active' : 'empty'}`} aria-label="Verb column">
-          {isVerbColumnActive && (
-            <div className="verb-grid">
-              {verbs.map((item) => (
+            <article className="object-column active mobile-free-panel" aria-label="Object column">
+              <div className="object-grid">
+                {objectOptions.map((item) => (
+                  <button
+                    key={item.__sourceKey || item.id}
+                    type="button"
+                    className={`ghost-tile ${
+                      objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id)
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() => onSelectObject(item)}
+                  >
+                    <img
+                      src={getTileDisplayImage(
+                        item,
+                        'object',
+                        objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id),
+                      )}
+                      alt=""
+                      aria-hidden="true"
+                      className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </article>
+          </section>
+        </>
+      ) : (
+        <section className={`board-layout ${boardModeClass}`} aria-label="AAC communication grid">
+          {sideRail}
+
+          <article className="subject-panel">
+            <div className="subject-grid">
+              {subjects.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  className={`verb-tile ${verb?.id === item.id ? 'selected' : ''}`}
-                  onClick={() => onSelectVerb(item)}
+                  className={`subject-tile ${subject?.id === item.id ? 'selected' : ''}`}
+                  onClick={() => onSelectSubject(item)}
                 >
                   <img
-                    src={getTileDisplayImage(item, 'verb', verb?.id === item.id)}
+                    src={getTileDisplayImage(item, 'subject', subject?.id === item.id)}
                     alt=""
                     aria-hidden="true"
                     className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
@@ -1513,40 +1632,63 @@ function App() {
                 </button>
               ))}
             </div>
-          )}
-        </article>
+          </article>
 
-        <article className={`object-column ${isObjectColumnActive ? 'active' : 'empty'}`} aria-label="Object column">
-          {isObjectColumnActive && (
-            <div className="object-grid">
-              {objectOptions.map((item) => (
-                <button
-                  key={item.__sourceKey || item.id}
-                  type="button"
-                  className={`ghost-tile ${
-                    objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id)
-                      ? 'selected'
-                      : ''
-                  }`}
-                  onClick={() => onSelectObject(item)}
-                >
-                  <img
-                    src={getTileDisplayImage(
-                      item,
-                      'object',
-                      objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id),
-                    )}
-                    alt=""
-                    aria-hidden="true"
-                    className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
-                  />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </article>
-      </section>
+          <article className={`verb-column ${isVerbColumnActive ? 'active' : 'empty'}`} aria-label="Verb column">
+            {isVerbColumnActive && (
+              <div className="verb-grid">
+                {verbs.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`verb-tile ${verb?.id === item.id ? 'selected' : ''}`}
+                    onClick={() => onSelectVerb(item)}
+                  >
+                    <img
+                      src={getTileDisplayImage(item, 'verb', verb?.id === item.id)}
+                      alt=""
+                      aria-hidden="true"
+                      className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </article>
+
+          <article className={`object-column ${isObjectColumnActive ? 'active' : 'empty'}`} aria-label="Object column">
+            {isObjectColumnActive && (
+              <div className="object-grid">
+                {objectOptions.map((item) => (
+                  <button
+                    key={item.__sourceKey || item.id}
+                    type="button"
+                    className={`ghost-tile ${
+                      objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id)
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() => onSelectObject(item)}
+                  >
+                    <img
+                      src={getTileDisplayImage(
+                        item,
+                        'object',
+                        objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id),
+                      )}
+                      alt=""
+                      aria-hidden="true"
+                      className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </article>
+        </section>
+      )}
 
       {isPinOpen && (
         <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Admin code">
