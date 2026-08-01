@@ -12,6 +12,14 @@ import './App.css'
 const STORAGE_KEY = 'arti-aac-tiles-v1'
 const ADMIN_PIN_MAX_LENGTH = 8
 
+function formatDurationLabel(durationMs) {
+  const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
 const DEFAULT_SUBJECTS = []
 
 const DEFAULT_VERBS = []
@@ -206,6 +214,9 @@ function App() {
   const [pinError, setPinError] = useState('')
   const [isUnlockingAdmin, setIsUnlockingAdmin] = useState(false)
   const [hasAdminAuth, setHasAdminAuth] = useState(() => hasAdminSession())
+  const [adminSessionExpiresAt, setAdminSessionExpiresAt] = useState(null)
+  const [adminUnlockLockedUntil, setAdminUnlockLockedUntil] = useState(null)
+  const [timeNow, setTimeNow] = useState(() => Date.now())
   const [isAdminOpen, setIsAdminOpen] = useState(false)
   const [adminTab, setAdminTab] = useState('subject')
 
@@ -231,6 +242,11 @@ function App() {
     fromIndex: -1,
     overIndex: -1,
   })
+
+  const adminLockoutRemainingMs = adminUnlockLockedUntil
+    ? Math.max(0, adminUnlockLockedUntil - timeNow)
+    : 0
+  const isAdminUnlockLocked = adminLockoutRemainingMs > 0
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -300,6 +316,7 @@ function App() {
         .catch((error) => {
           if (error instanceof Error && error.message === 'Admin session expired') {
             setHasAdminAuth(false)
+            setAdminSessionExpiresAt(null)
             setIsAdminOpen(false)
             setIsPinOpen(true)
             setPinInput('')
@@ -426,6 +443,45 @@ function App() {
   }, [dragState.active])
 
   useEffect(() => {
+    if (!isPinOpen && !hasAdminAuth && !adminUnlockLockedUntil) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(() => {
+      setTimeNow(Date.now())
+    }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [isPinOpen, hasAdminAuth, adminUnlockLockedUntil])
+
+  useEffect(() => {
+    if (!adminUnlockLockedUntil || adminUnlockLockedUntil > timeNow) {
+      return
+    }
+
+    setAdminUnlockLockedUntil(null)
+  }, [adminUnlockLockedUntil, timeNow])
+
+  useEffect(() => {
+    if (!hasAdminAuth || !adminSessionExpiresAt || adminSessionExpiresAt > timeNow) {
+      return
+    }
+
+    clearAdminSession()
+    setHasAdminAuth(false)
+    setAdminSessionExpiresAt(null)
+
+    if (isAdminOpen) {
+      setIsAdminOpen(false)
+      setIsPinOpen(true)
+      setPinInput('')
+      setPinError('Session expired. Enter admin code again.')
+    }
+  }, [adminSessionExpiresAt, hasAdminAuth, isAdminOpen, timeNow])
+
+  useEffect(() => {
     if (!isPinOpen || isUnlockingAdmin) {
       return undefined
     }
@@ -460,7 +516,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [isPinOpen, isUnlockingAdmin, pinInput])
+  }, [isPinOpen, isUnlockingAdmin, pinInput, isAdminUnlockLocked])
 
   const objectOptions = useMemo(() => {
     if (!verb) {
@@ -544,6 +600,29 @@ function App() {
     return 'Waiting for first sync'
   }, [lastSyncedLabel, syncState])
 
+  const adminSessionExpiresLabel = useMemo(() => {
+    if (!adminSessionExpiresAt || typeof Intl === 'undefined') {
+      return ''
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(adminSessionExpiresAt)
+  }, [adminSessionExpiresAt])
+
+  const adminStatusMessage = useMemo(() => {
+    if (hasAdminAuth && adminSessionExpiresLabel) {
+      return `Unlocked until ${adminSessionExpiresLabel}`
+    }
+
+    if (hasAdminAuth) {
+      return 'Unlocked'
+    }
+
+    return 'Locked'
+  }, [adminSessionExpiresLabel, hasAdminAuth])
+
   const topSelections = useMemo(
     () => [
       {
@@ -577,12 +656,22 @@ function App() {
   }
 
   const onOpenPin = () => {
+    if (hasAdminAuth) {
+      setPinError('')
+      setIsAdminOpen(true)
+      return
+    }
+
     setPinInput('')
     setPinError('')
     setIsPinOpen(true)
   }
 
   const onAppendPinDigit = (digit) => {
+    if (isAdminUnlockLocked) {
+      return
+    }
+
     setPinError('')
     setPinInput((current) => {
       if (current.length >= ADMIN_PIN_MAX_LENGTH) {
@@ -594,16 +683,28 @@ function App() {
   }
 
   const onDeletePinDigit = () => {
+    if (isAdminUnlockLocked) {
+      return
+    }
+
     setPinError('')
     setPinInput((current) => current.slice(0, -1))
   }
 
   const onClearPin = () => {
+    if (isAdminUnlockLocked) {
+      return
+    }
+
     setPinError('')
     setPinInput('')
   }
 
   const onSubmitPin = async () => {
+    if (isAdminUnlockLocked) {
+      return
+    }
+
     const pin = pinInput.trim()
     if (!pin) {
       setPinError('Enter admin code')
@@ -614,14 +715,25 @@ function App() {
     setIsUnlockingAdmin(true)
 
     try {
-      await unlockAdminSession(pin)
+      const session = await unlockAdminSession(pin)
       setHasAdminAuth(true)
+      setAdminSessionExpiresAt(Date.now() + (session.expiresInSeconds || 0) * 1000)
+      setAdminUnlockLockedUntil(null)
       setIsPinOpen(false)
       setIsAdminOpen(true)
       setPinInput('')
     } catch (error) {
-      if (error instanceof Error && error.message === 'Invalid admin code') {
-        setPinError('Incorrect code')
+      if (error instanceof Error && error.code === 'INVALID_ADMIN_CODE') {
+        if (typeof error.attemptsRemaining === 'number') {
+          const triesLabel = error.attemptsRemaining === 1 ? 'try' : 'tries'
+          setPinError(`Incorrect code. ${error.attemptsRemaining} ${triesLabel} left.`)
+        } else {
+          setPinError('Incorrect code')
+        }
+      } else if (error instanceof Error && error.code === 'ADMIN_UNLOCK_LOCKED') {
+        const retryAfterSeconds = Math.max(1, Number(error.retryAfterSeconds || 0))
+        setAdminUnlockLockedUntil(Date.now() + retryAfterSeconds * 1000)
+        setPinError('Too many attempts.')
       } else {
         setPinError('Could not verify code. Try again.')
       }
@@ -631,8 +743,6 @@ function App() {
   }
 
   const onCloseAdmin = () => {
-    clearAdminSession()
-    setHasAdminAuth(false)
     setIsAdminOpen(false)
     setAdminTab('subject')
     setRestoreDraft(null)
@@ -641,6 +751,15 @@ function App() {
     setBackupStatus('')
     setDeletedToasts([])
     setCreatedToasts([])
+  }
+
+  const onLockAdmin = () => {
+    clearAdminSession()
+    setHasAdminAuth(false)
+    setAdminSessionExpiresAt(null)
+    setPinInput('')
+    setPinError('')
+    onCloseAdmin()
   }
 
   const createDeletedToast = (payload) => {
@@ -1193,11 +1312,14 @@ function App() {
             </button>
             <button
               type="button"
-              className="lock-tile"
-              aria-label="Admin panel"
+              className={`lock-tile ${hasAdminAuth ? 'unlocked' : ''}`}
+              aria-label={hasAdminAuth ? 'Admin unlocked' : 'Admin locked'}
               onClick={onOpenPin}
             >
-              🔒
+              <span className="lock-tile-icon" aria-hidden="true">
+                {hasAdminAuth ? '🔓' : '🔒'}
+              </span>
+              <span className="lock-tile-label">{hasAdminAuth ? 'admin on' : 'admin'}</span>
             </button>
           </div>
         </aside>
@@ -1269,6 +1391,7 @@ function App() {
                   type="button"
                   className="admin-pin-key"
                   onClick={() => onAppendPinDigit(digit)}
+                  disabled={isAdminUnlockLocked}
                 >
                   {digit}
                 </button>
@@ -1277,7 +1400,7 @@ function App() {
                 type="button"
                 className="admin-pin-key admin-pin-key-alt"
                 onClick={onClearPin}
-                disabled={!pinInput}
+                disabled={!pinInput || isAdminUnlockLocked}
               >
                 Clear
               </button>
@@ -1285,6 +1408,7 @@ function App() {
                 type="button"
                 className="admin-pin-key"
                 onClick={() => onAppendPinDigit('0')}
+                disabled={isAdminUnlockLocked}
               >
                 0
               </button>
@@ -1292,14 +1416,19 @@ function App() {
                 type="button"
                 className="admin-pin-key admin-pin-key-alt"
                 onClick={onDeletePinDigit}
-                disabled={!pinInput}
+                disabled={!pinInput || isAdminUnlockLocked}
               >
                 Delete
               </button>
             </div>
             {pinError && <p className="admin-error">{pinError}</p>}
+            {isAdminUnlockLocked && (
+              <p className="admin-pin-status" role="status" aria-live="polite">
+                Try again in {formatDurationLabel(adminLockoutRemainingMs)}.
+              </p>
+            )}
             <div className="admin-pin-actions">
-              <button type="button" className="admin-btn" onClick={onSubmitPin} disabled={isUnlockingAdmin || !pinInput}>
+              <button type="button" className="admin-btn" onClick={onSubmitPin} disabled={isUnlockingAdmin || !pinInput || isAdminUnlockLocked}>
                 {isUnlockingAdmin ? 'Unlocking...' : 'Unlock'}
               </button>
               <button type="button" className="admin-btn ghost" onClick={() => setIsPinOpen(false)}>
@@ -1314,7 +1443,10 @@ function App() {
         <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Tile admin">
           <section className="admin-panel">
             <header className="admin-header">
-              <h2>Tile Admin</h2>
+              <div>
+                <h2>Tile Admin</h2>
+                <p className="admin-session-status">{adminStatusMessage}</p>
+              </div>
               <div className="admin-header-actions">
                 <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
                   Export backup
@@ -1330,6 +1462,9 @@ function App() {
                     }}
                   />
                 </label>
+                <button type="button" className="admin-btn ghost" onClick={onLockAdmin}>
+                  Lock admin
+                </button>
                 <button type="button" className="admin-btn ghost" onClick={onCloseAdmin}>
                   Close
                 </button>
