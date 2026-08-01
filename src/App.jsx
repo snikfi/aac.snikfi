@@ -1586,7 +1586,19 @@ function App() {
                   data-admin-item-index={index}
                 >
                   <div className="admin-item-media">
-                    <img src={item.image} alt="" aria-hidden="true" />
+                    <div
+                      className={`admin-item-preview ${
+                        adminTab === 'subject'
+                          ? 'subject-tile'
+                          : adminTab === 'verb'
+                            ? 'verb-tile'
+                            : 'ghost-tile'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      <img src={item.image} alt="" />
+                      <span>{item.label}</span>
+                    </div>
                     <button
                       type="button"
                       className="admin-media-btn admin-media-drag admin-drag-handle"
