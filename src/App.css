@@ -230,6 +230,17 @@
   font-size: 20px;
 }
 
+.lock-tile.unlocked {
+  background: #d7f6ce;
+  border-color: #b8d9bf;
+  color: #114a1a;
+}
+
+.lock-tile-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
 .sync-rail-btn {
   position: relative;
   border: 1px solid #dceec7;
@@ -244,9 +255,9 @@
 }
 
 .sync-rail-btn.tone-error {
-  border-color: #f2b9b9;
-  background: #ffdede;
-  color: #7a1515;
+  border-color: #6c6a61;
+  background: #5c5a53;
+  color: #f1df9b;
 }
 
 .sync-rail-icon {
@@ -386,6 +397,12 @@
   gap: 8px;
 }
 
+.admin-pin-status {
+  margin: 8px 0 0;
+  color: #5d4a00;
+  font-weight: 700;
+}
+
 .admin-pin-actions .admin-btn {
   flex: 1;
 }
@@ -425,6 +442,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.admin-session-status {
+  margin: 4px 0 0;
+  color: #415069;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .admin-header-actions {
