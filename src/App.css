@@ -506,6 +506,22 @@
   flex-wrap: wrap;
 }
 
+.admin-header-actions .admin-btn.ghost,
+.admin-header-actions .admin-file-btn {
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  line-height: 1;
+}
+
 .admin-close-icon {
   width: 44px;
   height: 44px;
@@ -1061,6 +1077,10 @@
 
 .admin-item-actions.object-actions {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-item-actions.quick-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .admin-drag-handle {

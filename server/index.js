@@ -56,6 +56,10 @@ function isValidTileConfig(config) {
     return false
   }
 
+  if (config.quickWords !== undefined && !Array.isArray(config.quickWords)) {
+    return false
+  }
+
   return true
 }
 

@@ -26,6 +26,8 @@ const TILE_BADGE_SELECTED_BACKGROUNDS = {
 }
 const TILE_UPLOAD_MAX_SIZE = 512
 const TILE_UPLOAD_QUALITY = 0.82
+const QUICK_WORD_SLOT_COUNT = 5
+const QUICK_WORD_PLACEHOLDER_BACKGROUND = '#e1e4ea'
 
 function formatDurationLabel(durationMs) {
   const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000))
@@ -47,7 +49,7 @@ const DEFAULT_SUBJECTS = []
 
 const DEFAULT_VERBS = []
 
-const QUICK_WORDS = [
+const DEFAULT_QUICK_WORDS = [
   {
     id: 'no',
     label: 'no',
@@ -112,11 +114,38 @@ function getTileDisplayImage(tile, scope, isSelected) {
 
 const DEFAULT_OBJECTS_BY_VERB = {}
 
+function createQuickPlaceholder(slotIndex = 0) {
+  return {
+    id: `quick-slot-${Date.now()}-${slotIndex}`,
+    label: '',
+    image: makeBadgeImage('+', QUICK_WORD_PLACEHOLDER_BACKGROUND),
+  }
+}
+
+function normalizeQuickWords(items) {
+  const source = Array.isArray(items) ? items : []
+
+  return Array.from({ length: QUICK_WORD_SLOT_COUNT }, (_, index) => {
+    const fallback = DEFAULT_QUICK_WORDS[index] || createQuickPlaceholder(index)
+    const candidate = source[index]
+    if (!candidate || typeof candidate !== 'object') {
+      return { ...fallback }
+    }
+
+    return {
+      id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : fallback.id,
+      label: typeof candidate.label === 'string' ? candidate.label : fallback.label,
+      image: typeof candidate.image === 'string' ? candidate.image : fallback.image,
+    }
+  })
+}
+
 function cloneDefaults() {
   return {
     subjects: structuredClone(DEFAULT_SUBJECTS),
     verbs: structuredClone(DEFAULT_VERBS),
     objectsByVerb: structuredClone(DEFAULT_OBJECTS_BY_VERB),
+    quickWords: structuredClone(DEFAULT_QUICK_WORDS),
   }
 }
 
@@ -130,6 +159,10 @@ function isValidTileConfig(config) {
   }
 
   if (!config.objectsByVerb || typeof config.objectsByVerb !== 'object') {
+    return false
+  }
+
+  if (config.quickWords !== undefined && !Array.isArray(config.quickWords)) {
     return false
   }
 
@@ -158,6 +191,7 @@ function loadTileConfig() {
       subjects: parsed.subjects,
       verbs: parsed.verbs,
       objectsByVerb: parsed.objectsByVerb,
+      quickWords: normalizeQuickWords(parsed.quickWords),
     }
   } catch {
     return defaults
@@ -315,6 +349,7 @@ function App() {
   const [subjects, setSubjects] = useState(initialConfig.subjects)
   const [verbs, setVerbs] = useState(initialConfig.verbs)
   const [objectsByVerb, setObjectsByVerb] = useState(initialConfig.objectsByVerb)
+  const [quickWords, setQuickWords] = useState(initialConfig.quickWords)
 
   const [subject, setSubject] = useState(null)
   const [verb, setVerb] = useState(null)
@@ -379,9 +414,9 @@ function App() {
       return
     }
 
-    const payload = JSON.stringify({ subjects, verbs, objectsByVerb })
+    const payload = JSON.stringify({ subjects, verbs, objectsByVerb, quickWords })
     window.localStorage.setItem(STORAGE_KEY, payload)
-  }, [subjects, verbs, objectsByVerb])
+  }, [subjects, verbs, objectsByVerb, quickWords])
 
   useEffect(() => {
     let isCanceled = false
@@ -403,6 +438,7 @@ function App() {
           setSubjects(remoteConfig.subjects)
           setVerbs(remoteConfig.verbs)
           setObjectsByVerb(remoteConfig.objectsByVerb)
+          setQuickWords(normalizeQuickWords(remoteConfig.quickWords))
         }
 
         setLastSyncedAt(new Date())
@@ -430,7 +466,7 @@ function App() {
       return
     }
 
-    const payload = { subjects, verbs, objectsByVerb }
+    const payload = { subjects, verbs, objectsByVerb, quickWords }
     setSyncState('saving')
 
     const timeoutId = window.setTimeout(() => {
@@ -456,7 +492,7 @@ function App() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [subjects, verbs, objectsByVerb, hasHydratedSync, hasAdminAuth])
+  }, [subjects, verbs, objectsByVerb, quickWords, hasHydratedSync, hasAdminAuth])
 
   useEffect(() => {
     if (!isSyncTipOpen) {
@@ -738,8 +774,8 @@ function App() {
   }, [subject, verb, objectWord])
 
   const tileConfig = useMemo(
-    () => ({ subjects, verbs, objectsByVerb }),
-    [subjects, verbs, objectsByVerb],
+    () => ({ subjects, verbs, objectsByVerb, quickWords }),
+    [subjects, verbs, objectsByVerb, quickWords],
   )
 
   const syncMessage = useMemo(() => {
@@ -1093,6 +1129,13 @@ function App() {
         ...current,
         [objectVerbId]: (current[objectVerbId] || []).map((item) => applyEdit(item)),
       }))
+      return
+    }
+
+    if (scope === 'quick') {
+      setQuickWords((current) =>
+        current.map((item) => applyEdit(item)),
+      )
     }
   }
 
@@ -1112,6 +1155,11 @@ function App() {
         ...current,
         [objectVerbId]: moveItem(current[objectVerbId] || [], index, direction),
       }))
+      return
+    }
+
+    if (scope === 'quick') {
+      setQuickWords((current) => moveItem(current, index, direction))
     }
   }
 
@@ -1138,6 +1186,11 @@ function App() {
         ...current,
         [objectVerbId]: moveTo(current[objectVerbId] || []),
       }))
+      return
+    }
+
+    if (scope === 'quick') {
+      setQuickWords((current) => moveTo(current))
     }
   }
 
@@ -1255,6 +1308,19 @@ function App() {
         ...current,
         [objectVerbId]: (current[objectVerbId] || []).filter((item) => item.id !== tile.id),
       }))
+      return
+    }
+
+    if (scope === 'quick') {
+      setDeletedToasts((current) => [...current, createDeletedToast({ scope, tile, index })])
+      setQuickWords((current) => {
+        const next = current.filter((item) => item.id !== tile.id)
+        while (next.length < QUICK_WORD_SLOT_COUNT) {
+          next.push(createQuickPlaceholder(next.length))
+        }
+
+        return next.slice(0, QUICK_WORD_SLOT_COUNT)
+      })
     }
   }
 
@@ -1302,6 +1368,15 @@ function App() {
           [objectVerbId]: next,
         }
       })
+      return
+    }
+
+    if (scope === 'quick') {
+      setQuickWords((current) => {
+        const next = [...current]
+        next.splice(index + 1, 0, duplicate)
+        return next.slice(0, QUICK_WORD_SLOT_COUNT)
+      })
     }
   }
 
@@ -1344,6 +1419,15 @@ function App() {
           deletedItem.index,
         ),
       }))
+      setDeletedToasts((current) => current.filter((toast) => toast.undoId !== undoId))
+      return
+    }
+
+    if (deletedItem.scope === 'quick') {
+      setQuickWords((current) => {
+        const restored = insertAt(current, deletedItem.tile, deletedItem.index)
+        return restored.slice(0, QUICK_WORD_SLOT_COUNT)
+      })
       setDeletedToasts((current) => current.filter((toast) => toast.undoId !== undoId))
     }
   }
@@ -1480,6 +1564,7 @@ function App() {
     setSubjects(restoreDraft.config.subjects)
     setVerbs(restoreDraft.config.verbs)
     setObjectsByVerb(restoreDraft.config.objectsByVerb)
+    setQuickWords(normalizeQuickWords(restoreDraft.config.quickWords))
     setSubject(null)
     setVerb(null)
     setObjectWord(null)
@@ -1494,8 +1579,14 @@ function App() {
   }
 
   const adminTiles =
-    adminTab === 'subject' ? subjects : adminTab === 'verb' ? verbs : adminObjectTiles
-  const adminTabLabel = adminTab === 'subject' ? 'subject' : adminTab === 'verb' ? 'verb' : 'object'
+    adminTab === 'subject'
+      ? subjects
+      : adminTab === 'verb'
+        ? verbs
+        : adminTab === 'object'
+          ? adminObjectTiles
+          : quickWords
+  const adminTabLabel = adminTab === 'subject' ? 'subject' : adminTab === 'verb' ? 'verb' : adminTab === 'object' ? 'object' : 'quick'
   const createTileTitle = adminTabLabel === 'object' ? 'Create an object tile' : `Create a ${adminTabLabel} tile`
   const searchTileTitle = `Search ${adminTabLabel} tiles`
   const selectedObjectVerb = verbs.find((item) => item.id === objectVerbId)
@@ -1504,6 +1595,11 @@ function App() {
   const objectTileCount = Object.values(objectsByVerb).reduce(
     (total, list) => total + (Array.isArray(list) ? list.length : 0),
     0,
+  )
+  const quickTileCount = quickWords.length
+  const activeQuickWords = useMemo(
+    () => quickWords.filter((item) => typeof item?.label === 'string' && item.label.trim()),
+    [quickWords],
   )
   const normalizedAdminSearch = adminSearchQuery.trim().toLowerCase()
   const visibleAdminTiles = normalizedAdminSearch
@@ -1587,7 +1683,7 @@ function App() {
 
   const sideRail = (
     <aside className="side-rail" aria-label="quick words">
-      {QUICK_WORDS.map((item) => (
+      {activeQuickWords.map((item) => (
         <button
           key={item.id}
           type="button"
@@ -1926,9 +2022,11 @@ function App() {
               </div>
               <div className="admin-header-actions">
                 <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
+                  <span className="admin-action-icon" aria-hidden="true">⤓</span>
                   Export backup
                 </button>
                 <label className="admin-btn ghost admin-file-btn">
+                  <span className="admin-action-icon" aria-hidden="true">⤒</span>
                   Restore backup
                   <input
                     type="file"
@@ -1940,6 +2038,7 @@ function App() {
                   />
                 </label>
                 <button type="button" className="admin-btn ghost" onClick={onLockAdmin}>
+                  <span className="admin-action-icon" aria-hidden="true">🔒</span>
                   Lock admin
                 </button>
                 <button type="button" className="admin-close-icon" onClick={onCloseAdmin} aria-label="Close Tile Admin">
@@ -1985,6 +2084,16 @@ function App() {
                   {objectTileCount}
                 </span>
               </button>
+              <button
+                type="button"
+                className={`admin-tab ${adminTab === 'quick' ? 'active' : ''}`}
+                onClick={() => setAdminTab('quick')}
+              >
+                <span>Quick</span>
+                <span className="admin-tab-badge object" aria-label={`${quickTileCount} quick tiles`}>
+                  {quickTileCount}
+                </span>
+              </button>
             </div>
 
             {adminTab === 'object' && (
@@ -2010,43 +2119,51 @@ function App() {
               </>
             )}
 
-            <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
-              <h3>{createTileTitle}</h3>
-              <p>Give the tile a name, then add an image.</p>
-              <div className="admin-create">
-                <div className="admin-create-name-field">
-                  <input
-                    type="text"
-                    value={newTileName}
-                    onChange={(event) => {
-                      setNewTileName(event.target.value)
-                      if (newTileNameError) {
-                        setNewTileNameError('')
-                      }
-                    }}
-                    placeholder="Tile name"
-                    aria-invalid={Boolean(newTileNameError)}
-                  />
-                  {newTileNameError && <p className="admin-inline-error">{newTileNameError}</p>}
-                  {newTileImage && (
-                    <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
-                  )}
-                </div>
-                <label className="admin-btn admin-file-btn admin-upload-btn">
-                  {newTileImage ? 'Upload a new image' : 'Upload image'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
-                  />
-                </label>
-                <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
-                  {`Create ${adminTabLabel} tile`}
-                </button>
-              </div>
-            </section>
+            {adminTab !== 'quick' ? (
+              <>
+                <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
+                  <h3>{createTileTitle}</h3>
+                  <p>Give the tile a name, then add an image.</p>
+                  <div className="admin-create">
+                    <div className="admin-create-name-field">
+                      <input
+                        type="text"
+                        value={newTileName}
+                        onChange={(event) => {
+                          setNewTileName(event.target.value)
+                          if (newTileNameError) {
+                            setNewTileNameError('')
+                          }
+                        }}
+                        placeholder="Tile name"
+                        aria-invalid={Boolean(newTileNameError)}
+                      />
+                      {newTileNameError && <p className="admin-inline-error">{newTileNameError}</p>}
+                      {newTileImage && (
+                        <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
+                      )}
+                    </div>
+                    <label className="admin-btn admin-file-btn admin-upload-btn">
+                      {newTileImage ? 'Upload a new image' : 'Upload image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
+                      />
+                    </label>
+                    <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
+                      {`Create ${adminTabLabel} tile`}
+                    </button>
+                  </div>
+                </section>
 
-            <div className="admin-section-divider" aria-hidden="true" />
+                <div className="admin-section-divider" aria-hidden="true" />
+              </>
+            ) : (
+              <div className="admin-object-help" role="note" aria-live="polite">
+                <p>Quick words has 5 fixed slots. Edit labels and images below to program the side tiles.</p>
+              </div>
+            )}
 
             <label className="admin-search-row">
               <span>{searchTileTitle}</span>
@@ -2111,7 +2228,7 @@ function App() {
                       type="button"
                       className="admin-media-btn admin-media-delete"
                       onClick={() => onRequestDeleteTile(adminTab, item, sourceIndex)}
-                      aria-label={`Delete ${item.label}`}
+                      aria-label={`Delete ${item.label || 'quick slot'}`}
                     >
                       <svg
                         className="admin-media-icon"
@@ -2149,7 +2266,7 @@ function App() {
                       />
                     </label>
                   </div>
-                  <div className={`admin-item-actions ${adminTab === 'object' ? 'object-actions' : ''}`}>
+                  <div className={`admin-item-actions ${adminTab === 'object' ? 'object-actions' : ''} ${adminTab === 'quick' ? 'quick-actions' : ''}`}>
                     <button
                       type="button"
                       className="admin-btn ghost"
@@ -2272,7 +2389,7 @@ function App() {
                     Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
                   </p>
                   <p>
-                    Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length}
+                    Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length} | Quick: {normalizeQuickWords(restoreDraft.config.quickWords).length}
                   </p>
                   <div className="admin-restore-actions">
                     <button type="button" className="admin-btn" onClick={onConfirmRestore}>
