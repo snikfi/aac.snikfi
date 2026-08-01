@@ -15,9 +15,14 @@ const ADMIN_UNLOCK_MAX_ATTEMPTS_FALLBACK = 5
 const ADMIN_UNLOCK_LOCKOUT_MINUTES_FALLBACK = 15
 const DEV_ADMIN_PIN = '0405'
 const TILE_BADGE_BACKGROUNDS = {
-  subject: '#fdeaec',
-  verb: '#fafdd9',
-  object: '#c7f5e8',
+  subject: '#f1d5d5',
+  verb: '#ebefbf',
+  object: '#b1e3d5',
+}
+const TILE_BADGE_SELECTED_BACKGROUNDS = {
+  subject: '#ebcbcb',
+  verb: '#f1f6b9',
+  object: '#a7d9cb',
 }
 
 function formatDurationLabel(durationMs) {
@@ -85,6 +90,18 @@ function isGeneratedBadgeImage(image) {
 
 function getTileBadgeBackground(scope) {
   return TILE_BADGE_BACKGROUNDS[scope] || TILE_BADGE_BACKGROUNDS.verb
+}
+
+function getTileBadgeSelectedBackground(scope) {
+  return TILE_BADGE_SELECTED_BACKGROUNDS[scope] || TILE_BADGE_SELECTED_BACKGROUNDS.verb
+}
+
+function getTileDisplayImage(tile, scope, isSelected) {
+  if (!isSelected || !isGeneratedBadgeImage(tile?.image)) {
+    return tile?.image
+  }
+
+  return makeBadgeImage(tile.label, getTileBadgeSelectedBackground(scope))
 }
 
 const DEFAULT_OBJECTS_BY_VERB = {}
@@ -1393,7 +1410,7 @@ function App() {
                 onClick={() => onSelectSubject(item)}
               >
                 <img
-                  src={item.image}
+                  src={getTileDisplayImage(item, 'subject', subject?.id === item.id)}
                   alt=""
                   aria-hidden="true"
                   className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
@@ -1415,7 +1432,7 @@ function App() {
                   onClick={() => onSelectVerb(item)}
                 >
                   <img
-                    src={item.image}
+                    src={getTileDisplayImage(item, 'verb', verb?.id === item.id)}
                     alt=""
                     aria-hidden="true"
                     className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
@@ -1438,7 +1455,7 @@ function App() {
                   onClick={() => onSelectObject(item)}
                 >
                   <img
-                    src={item.image}
+                    src={getTileDisplayImage(item, 'object', objectWord?.id === item.id)}
                     alt=""
                     aria-hidden="true"
                     className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
