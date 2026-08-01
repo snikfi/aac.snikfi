@@ -343,6 +343,7 @@ function App() {
 
   const [objectVerbId, setObjectVerbId] = useState(verbs[0]?.id || '')
   const [newTileName, setNewTileName] = useState('')
+  const [newTileNameError, setNewTileNameError] = useState('')
   const [newTileImage, setNewTileImage] = useState('')
   const [adminSearchQuery, setAdminSearchQuery] = useState('')
   const [syncState, setSyncState] = useState(
@@ -979,11 +980,15 @@ function App() {
   const onCloseAdmin = () => {
     setIsAdminOpen(false)
     setAdminTab('subject')
+    setNewTileName('')
+    setNewTileImage('')
+    setNewTileNameError('')
     setRestoreDraft(null)
     setExportNotice(null)
     setDeleteDraft(null)
     setMoveObjectDraft(null)
     setBackupStatus('')
+    setNewTileNameError('')
     setDeletedToasts([])
     setCreatedToasts([])
   }
@@ -1025,8 +1030,11 @@ function App() {
   const onAddTile = () => {
     const label = newTileName.trim()
     if (!label) {
+      setNewTileNameError('Tile name is required.')
       return
     }
+
+    setNewTileNameError('')
 
     const tile = createNewTile(label, newTileImage.trim(), adminTab)
 
@@ -2006,21 +2014,33 @@ function App() {
               <h3>{createTileTitle}</h3>
               <p>Give the tile a name, then add an image.</p>
               <div className="admin-create">
-                <input
-                  type="text"
-                  value={newTileName}
-                  onChange={(event) => setNewTileName(event.target.value)}
-                  placeholder="Tile name"
-                />
+                <div className="admin-create-name-field">
+                  <input
+                    type="text"
+                    value={newTileName}
+                    onChange={(event) => {
+                      setNewTileName(event.target.value)
+                      if (newTileNameError) {
+                        setNewTileNameError('')
+                      }
+                    }}
+                    placeholder="Tile name"
+                    aria-invalid={Boolean(newTileNameError)}
+                  />
+                  {newTileNameError && <p className="admin-inline-error">{newTileNameError}</p>}
+                  {newTileImage && (
+                    <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
+                  )}
+                </div>
                 <label className="admin-btn admin-file-btn admin-upload-btn">
-                  Upload an image
+                  {newTileImage ? 'Upload a new image' : 'Upload image'}
                   <input
                     type="file"
                     accept="image/*"
                     onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
                   />
                 </label>
-                <button type="button" className="admin-btn" onClick={onAddTile}>
+                <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
                   {`Create ${adminTabLabel} tile`}
                 </button>
               </div>
@@ -2119,7 +2139,7 @@ function App() {
                       }
                     />
                     <label className="admin-btn admin-file-btn admin-upload-btn">
-                      Upload an image
+                      {item.image && !isGeneratedBadgeImage(item.image) ? 'Upload a new image' : 'Upload image'}
                       <input
                         type="file"
                         accept="image/*"

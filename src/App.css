@@ -530,6 +530,7 @@
 .admin-file-btn {
   position: relative;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .admin-file-btn input {
@@ -781,8 +782,29 @@
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 8px;
-  align-items: center;
+  align-items: start;
   margin-bottom: 0;
+}
+
+.admin-create-name-field {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-inline-error {
+  margin: -2px 0 0;
+  color: #a1182a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-upload-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  border: 1px solid #d8d9de;
+  background: #ffffff;
+  object-fit: cover;
 }
 
 .admin-upload-btn {
@@ -793,6 +815,14 @@
   background: #ffffff;
   color: #121315;
   border: 1px solid #d8d9de;
+  cursor: pointer;
+}
+
+.admin-create-submit {
+  height: 42.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .admin-create-card {
