@@ -1128,6 +1128,10 @@ function App() {
     }
   }
 
+  const onDismissDeleteToast = (undoId) => {
+    setDeletedToasts((current) => current.filter((toast) => toast.undoId !== undoId))
+  }
+
   const onUploadTileImage = async (scope, id, file) => {
     if (!file) {
       return
@@ -1776,15 +1780,25 @@ function App() {
               {deletedToasts.map((toast) => (
                 <div key={toast.undoId} className="admin-undo-toast" role="status">
                   <span>
-                    Deleted &quot;{toast.tile.label}&quot;.
+                    Tile &quot;{toast.tile.label}&quot; deleted.
                   </span>
-                  <button
-                    type="button"
-                    className="admin-btn ghost"
-                    onClick={() => onUndoDelete(toast.undoId)}
-                  >
-                    Undo
-                  </button>
+                  <div className="admin-undo-toast-actions">
+                    <button
+                      type="button"
+                      className="admin-btn ghost"
+                      onClick={() => onUndoDelete(toast.undoId)}
+                    >
+                      Undo
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-toast-close"
+                      aria-label="Dismiss notification"
+                      onClick={() => onDismissDeleteToast(toast.undoId)}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
