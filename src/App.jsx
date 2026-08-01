@@ -27,7 +27,7 @@ const TILE_BADGE_SELECTED_BACKGROUNDS = {
 const TILE_UPLOAD_MAX_SIZE = 512
 const TILE_UPLOAD_QUALITY = 0.82
 const QUICK_WORD_SLOT_COUNT = 5
-const QUICK_WORD_PLACEHOLDER_BACKGROUND = '#e1e4ea'
+const QUICK_WORD_GENERATED_BACKGROUND = 'transparent'
 
 function formatDurationLabel(durationMs) {
   const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000))
@@ -118,26 +118,32 @@ function createQuickPlaceholder(slotIndex = 0) {
   return {
     id: `quick-slot-${Date.now()}-${slotIndex}`,
     label: '',
-    image: makeBadgeImage('+', QUICK_WORD_PLACEHOLDER_BACKGROUND),
+    image: makeBadgeImage('+', QUICK_WORD_GENERATED_BACKGROUND),
   }
 }
 
 function normalizeQuickWords(items) {
-  const source = Array.isArray(items) ? items : []
+  if (!Array.isArray(items)) {
+    return structuredClone(DEFAULT_QUICK_WORDS)
+  }
 
-  return Array.from({ length: QUICK_WORD_SLOT_COUNT }, (_, index) => {
-    const fallback = DEFAULT_QUICK_WORDS[index] || createQuickPlaceholder(index)
-    const candidate = source[index]
-    if (!candidate || typeof candidate !== 'object') {
-      return { ...fallback }
-    }
+  return items
+    .filter((candidate) => candidate && typeof candidate === 'object')
+    .slice(0, QUICK_WORD_SLOT_COUNT)
+    .map((candidate, index) => {
+      const fallback = createQuickPlaceholder(index)
+      const label = typeof candidate.label === 'string' ? candidate.label : ''
 
-    return {
-      id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : fallback.id,
-      label: typeof candidate.label === 'string' ? candidate.label : fallback.label,
-      image: typeof candidate.image === 'string' ? candidate.image : fallback.image,
-    }
-  })
+      return {
+        id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : fallback.id,
+        label,
+        image: typeof candidate.image === 'string'
+          ? (isGeneratedBadgeImage(candidate.image)
+            ? makeBadgeImage(label || '+', QUICK_WORD_GENERATED_BACKGROUND)
+            : candidate.image)
+          : makeBadgeImage(label || '+', QUICK_WORD_GENERATED_BACKGROUND),
+      }
+    })
 }
 
 function cloneDefaults() {
@@ -1056,10 +1062,11 @@ function App() {
   }
 
   const createNewTile = (label, image, scope) => {
+    const fallbackBackground = scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope)
     return {
       id: toTileId(label),
       label,
-      image: image || makeBadgeImage(label, getTileBadgeBackground(scope)),
+      image: image || makeBadgeImage(label, fallbackBackground),
     }
   }
 
@@ -1087,6 +1094,13 @@ function App() {
         ...current,
         [objectVerbId]: [...(current[objectVerbId] || []), tile],
       }))
+    } else if (adminTab === 'quick') {
+      if (quickWords.length >= QUICK_WORD_SLOT_COUNT) {
+        setNewTileNameError(`Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items.`)
+        return
+      }
+
+      setQuickWords((current) => [...current, tile].slice(0, QUICK_WORD_SLOT_COUNT))
     }
 
     const createdTypeLabel = adminTab.charAt(0).toUpperCase() + adminTab.slice(1)
@@ -1104,7 +1118,8 @@ function App() {
       const nextItem = { ...item, [field]: value }
 
       if (field === 'label' && isGeneratedBadgeImage(item.image)) {
-        nextItem.image = makeBadgeImage(value, getTileBadgeBackground(scope))
+        const badgeBackground = scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope)
+        nextItem.image = makeBadgeImage(value || '+', badgeBackground)
       }
 
       return nextItem
@@ -1313,14 +1328,7 @@ function App() {
 
     if (scope === 'quick') {
       setDeletedToasts((current) => [...current, createDeletedToast({ scope, tile, index })])
-      setQuickWords((current) => {
-        const next = current.filter((item) => item.id !== tile.id)
-        while (next.length < QUICK_WORD_SLOT_COUNT) {
-          next.push(createQuickPlaceholder(next.length))
-        }
-
-        return next.slice(0, QUICK_WORD_SLOT_COUNT)
-      })
+      setQuickWords((current) => current.filter((item) => item.id !== tile.id))
     }
   }
 
@@ -1333,7 +1341,8 @@ function App() {
     }
 
     if (isGeneratedBadgeImage(tile.image)) {
-      duplicate.image = makeBadgeImage(duplicateLabel, getTileBadgeBackground(scope))
+      const badgeBackground = scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope)
+      duplicate.image = makeBadgeImage(duplicateLabel, badgeBackground)
     }
 
     if (scope === 'subject') {
@@ -2089,7 +2098,7 @@ function App() {
                 className={`admin-tab ${adminTab === 'quick' ? 'active' : ''}`}
                 onClick={() => setAdminTab('quick')}
               >
-                <span>Quick</span>
+                <span>Quick tiles</span>
                 <span className="admin-tab-badge object" aria-label={`${quickTileCount} quick tiles`}>
                   {quickTileCount}
                 </span>
@@ -2119,49 +2128,49 @@ function App() {
               </>
             )}
 
-            {adminTab !== 'quick' ? (
-              <>
-                <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
-                  <h3>{createTileTitle}</h3>
-                  <p>Give the tile a name, then add an image.</p>
-                  <div className="admin-create">
-                    <div className="admin-create-name-field">
-                      <input
-                        type="text"
-                        value={newTileName}
-                        onChange={(event) => {
-                          setNewTileName(event.target.value)
-                          if (newTileNameError) {
-                            setNewTileNameError('')
-                          }
-                        }}
-                        placeholder="Tile name"
-                        aria-invalid={Boolean(newTileNameError)}
-                      />
-                      {newTileNameError && <p className="admin-inline-error">{newTileNameError}</p>}
-                      {newTileImage && (
-                        <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
-                      )}
-                    </div>
-                    <label className="admin-btn admin-file-btn admin-upload-btn">
-                      {newTileImage ? 'Upload a new image' : 'Upload image'}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
-                      />
-                    </label>
-                    <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
-                      {`Create ${adminTabLabel} tile`}
-                    </button>
+            <>
+              <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
+                <h3>{createTileTitle}</h3>
+                <p>Give the tile a name, then add an image.</p>
+                <div className="admin-create">
+                  <div className="admin-create-name-field">
+                    <input
+                      type="text"
+                      value={newTileName}
+                      onChange={(event) => {
+                        setNewTileName(event.target.value)
+                        if (newTileNameError) {
+                          setNewTileNameError('')
+                        }
+                      }}
+                      placeholder="Tile name"
+                      aria-invalid={Boolean(newTileNameError)}
+                    />
+                    {newTileNameError && <p className="admin-inline-error">{newTileNameError}</p>}
+                    {newTileImage && (
+                      <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
+                    )}
                   </div>
-                </section>
+                  <label className="admin-btn admin-file-btn admin-upload-btn">
+                    {newTileImage ? 'Upload a new image' : 'Upload image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
+                    />
+                  </label>
+                  <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
+                    {`Create ${adminTabLabel} tile`}
+                  </button>
+                </div>
+              </section>
 
-                <div className="admin-section-divider" aria-hidden="true" />
-              </>
-            ) : (
+              <div className="admin-section-divider" aria-hidden="true" />
+            </>
+
+            {adminTab === 'quick' && (
               <div className="admin-object-help" role="note" aria-live="polite">
-                <p>Quick words has 5 fixed slots. Edit labels and images below to program the side tiles.</p>
+                <p>Quick tiles support up to 5 items. Delete a quick tile to make room for a new one.</p>
               </div>
             )}
 
@@ -2198,7 +2207,7 @@ function App() {
                   }`}
                   data-admin-item-index={sourceIndex}
                 >
-                  <div className="admin-item-media">
+                  <div className={`admin-item-media ${adminTab === 'quick' ? 'quick-item-media' : ''}`}>
                     <div
                       className={`admin-item-preview ${
                         adminTab === 'subject'

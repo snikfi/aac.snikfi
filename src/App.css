@@ -223,6 +223,15 @@
   object-fit: contain;
 }
 
+.side-tile span {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
 .lock-tile {
   background: #393939;
   color: #ffffff;
@@ -1026,6 +1035,14 @@
 .admin-item-media {
   position: relative;
   display: flex;
+}
+
+.admin-item-media.quick-item-media {
+  background: transparent;
+}
+
+.admin-item-media.quick-item-media .ghost-tile {
+  background: #f3f4f6;
 }
 
 .admin-item-preview {
