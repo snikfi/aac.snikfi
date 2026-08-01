@@ -1345,7 +1345,6 @@ function App() {
               <span className="lock-tile-icon" aria-hidden="true">
                 {hasAdminAuth ? '🔓' : '🔒'}
               </span>
-              <span className="lock-tile-label">{hasAdminAuth ? 'admin on' : 'admin'}</span>
             </button>
           </div>
         </aside>
