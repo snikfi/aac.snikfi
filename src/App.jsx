@@ -27,8 +27,10 @@ const TILE_BADGE_SELECTED_BACKGROUNDS = {
 const TILE_UPLOAD_MAX_SIZE = 512
 const TILE_UPLOAD_QUALITY = 0.82
 const TILE_LABEL_MAX_LENGTH = 38
+const TILE_SPOKEN_MAX_LENGTH = 80
 const QUICK_WORD_SLOT_COUNT = 5
 const QUICK_WORD_GENERATED_BACKGROUND = 'transparent'
+const VOICE_PREVIEW_TEXT = 'Hi, welcome to your Arti communication dashboard.'
 const QUICK_LIMIT_ERROR_MESSAGE = `Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items. Remove an existing quick tile before you add or copy another one.`
 const MOBILE_LAYOUT_QUERY = '(max-width: 61.25rem)'
 const DIALOG_FOCUSABLE_SELECTOR = [
@@ -190,10 +192,14 @@ function normalizeQuickWords(items) {
     .map((candidate, index) => {
       const fallback = createQuickPlaceholder(index)
       const label = typeof candidate.label === 'string' ? candidate.label : ''
+      const spoken = typeof candidate.spoken === 'string'
+        ? candidate.spoken.slice(0, TILE_SPOKEN_MAX_LENGTH)
+        : ''
 
       return {
         id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : fallback.id,
         label,
+        spoken,
         image: typeof candidate.image === 'string'
           ? (isGeneratedBadgeImage(candidate.image)
             ? makeBadgeImage(label || '+', QUICK_WORD_GENERATED_BACKGROUND)
@@ -203,12 +209,46 @@ function normalizeQuickWords(items) {
     })
 }
 
+function getTileSpeechText(tile, fallbackToLowercaseLabel = false) {
+  const spoken = typeof tile?.spoken === 'string' ? tile.spoken.trim() : ''
+  if (spoken) {
+    return spoken
+  }
+
+  const label = typeof tile?.label === 'string' ? tile.label.trim() : ''
+  return fallbackToLowercaseLabel ? label.toLowerCase() : label
+}
+
+function normalizeVoicePreference(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function getVoicePreferenceId(voice) {
+  if (!voice || typeof voice !== 'object') {
+    return ''
+  }
+
+  if (voice.voiceURI && typeof voice.voiceURI === 'string' && voice.voiceURI.trim()) {
+    return voice.voiceURI.trim()
+  }
+
+  const voiceName = typeof voice.name === 'string' ? voice.name.trim() : ''
+  const voiceLang = typeof voice.lang === 'string' ? voice.lang.trim() : ''
+
+  if (!voiceName && !voiceLang) {
+    return ''
+  }
+
+  return `${voiceName}__${voiceLang}`
+}
+
 function cloneDefaults() {
   return {
     subjects: structuredClone(DEFAULT_SUBJECTS),
     verbs: structuredClone(DEFAULT_VERBS),
     objectsByVerb: structuredClone(DEFAULT_OBJECTS_BY_VERB),
     quickWords: structuredClone(DEFAULT_QUICK_WORDS),
+    voicePreference: '',
   }
 }
 
@@ -226,6 +266,10 @@ function isValidTileConfig(config) {
   }
 
   if (config.quickWords !== undefined && !Array.isArray(config.quickWords)) {
+    return false
+  }
+
+  if (config.voicePreference !== undefined && typeof config.voicePreference !== 'string') {
     return false
   }
 
@@ -255,6 +299,7 @@ function loadTileConfig() {
       verbs: parsed.verbs,
       objectsByVerb: parsed.objectsByVerb,
       quickWords: normalizeQuickWords(parsed.quickWords),
+      voicePreference: normalizeVoicePreference(parsed.voicePreference),
     }
   } catch {
     return defaults
@@ -358,7 +403,7 @@ async function optimizeTileUpload(file) {
   )
 }
 
-function speakText(text) {
+function speakText(text, voicePreference = '') {
   if (!text || typeof window === 'undefined' || !window.speechSynthesis) {
     return
   }
@@ -370,32 +415,47 @@ function speakText(text) {
 
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(normalizedText)
+
+  const preferredVoice = normalizeVoicePreference(voicePreference)
+  if (preferredVoice) {
+    const matchingVoice = window.speechSynthesis
+      .getVoices()
+      .find((voice) => getVoicePreferenceId(voice) === preferredVoice)
+
+    if (matchingVoice) {
+      utterance.voice = matchingVoice
+      utterance.lang = matchingVoice.lang
+    }
+  }
+
   utterance.rate = 0.9
   utterance.pitch = 1
   window.speechSynthesis.speak(utterance)
 }
 
 function enhanceSentence(subject, verb, objectWord) {
-  const spokenObject = objectWord?.spoken || objectWord?.label?.toLowerCase()
+  const spokenSubject = getTileSpeechText(subject)
+  const spokenVerb = getTileSpeechText(verb, true)
+  const spokenObject = getTileSpeechText(objectWord, true)
 
   if (subject && verb) {
     if (!spokenObject) {
-      return `${subject.label} ${verb.label.toLowerCase()}.`
+      return `${spokenSubject} ${spokenVerb}.`
     }
 
-    return `${subject.label} ${verb.label.toLowerCase()} ${spokenObject}.`
+    return `${spokenSubject} ${spokenVerb} ${spokenObject}.`
   }
 
   if (verb && spokenObject) {
-    return `${verb.label} ${spokenObject}.`
+    return `${spokenVerb} ${spokenObject}.`
   }
 
   if (verb) {
-    return `${verb.label}.`
+    return `${spokenVerb}.`
   }
 
   if (subject && spokenObject) {
-    return `${subject.label} ${spokenObject}.`
+    return `${spokenSubject} ${spokenObject}.`
   }
 
   return ''
@@ -425,6 +485,10 @@ function App() {
   const [verbs, setVerbs] = useState(initialConfig.verbs)
   const [objectsByVerb, setObjectsByVerb] = useState(initialConfig.objectsByVerb)
   const [quickWords, setQuickWords] = useState(initialConfig.quickWords)
+  const [voicePreference, setVoicePreference] = useState(
+    normalizeVoicePreference(initialConfig.voicePreference),
+  )
+  const [availableVoices, setAvailableVoices] = useState([])
 
   const [subject, setSubject] = useState(null)
   const [verb, setVerb] = useState(null)
@@ -448,6 +512,7 @@ function App() {
 
   const [objectVerbId, setObjectVerbId] = useState(verbs[0]?.id || '')
   const [newTileName, setNewTileName] = useState('')
+  const [newTileSpoken, setNewTileSpoken] = useState('')
   const [newTileNameError, setNewTileNameError] = useState('')
   const [newTileImage, setNewTileImage] = useState('')
   const [adminSearchQuery, setAdminSearchQuery] = useState('')
@@ -494,9 +559,33 @@ function App() {
       return
     }
 
-    const payload = JSON.stringify({ subjects, verbs, objectsByVerb, quickWords })
+    const payload = JSON.stringify({ subjects, verbs, objectsByVerb, quickWords, voicePreference })
     window.localStorage.setItem(STORAGE_KEY, payload)
-  }, [subjects, verbs, objectsByVerb, quickWords])
+  }, [subjects, verbs, objectsByVerb, quickWords, voicePreference])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      return undefined
+    }
+
+    const speech = window.speechSynthesis
+
+    const updateVoices = () => {
+      setAvailableVoices(speech.getVoices())
+    }
+
+    updateVoices()
+
+    if (typeof speech.addEventListener === 'function') {
+      speech.addEventListener('voiceschanged', updateVoices)
+      return () => speech.removeEventListener('voiceschanged', updateVoices)
+    }
+
+    speech.onvoiceschanged = updateVoices
+    return () => {
+      speech.onvoiceschanged = null
+    }
+  }, [])
 
   useEffect(() => {
     let isCanceled = false
@@ -519,6 +608,7 @@ function App() {
           setVerbs(remoteConfig.verbs)
           setObjectsByVerb(remoteConfig.objectsByVerb)
           setQuickWords(normalizeQuickWords(remoteConfig.quickWords))
+          setVoicePreference(normalizeVoicePreference(remoteConfig.voicePreference))
         }
 
         setLastSyncedAt(new Date())
@@ -546,7 +636,7 @@ function App() {
       return
     }
 
-    const payload = { subjects, verbs, objectsByVerb, quickWords }
+    const payload = { subjects, verbs, objectsByVerb, quickWords, voicePreference }
     setSyncState('saving')
 
     const timeoutId = window.setTimeout(() => {
@@ -572,7 +662,7 @@ function App() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [subjects, verbs, objectsByVerb, quickWords, hasHydratedSync, hasAdminAuth])
+  }, [subjects, verbs, objectsByVerb, quickWords, voicePreference, hasHydratedSync, hasAdminAuth])
 
   useEffect(() => {
     if (!isSyncTipOpen) {
@@ -1018,8 +1108,8 @@ function App() {
   }, [subject, verb, objectWord])
 
   const tileConfig = useMemo(
-    () => ({ subjects, verbs, objectsByVerb, quickWords }),
-    [subjects, verbs, objectsByVerb, quickWords],
+    () => ({ subjects, verbs, objectsByVerb, quickWords, voicePreference }),
+    [subjects, verbs, objectsByVerb, quickWords, voicePreference],
   )
 
   const syncMessage = useMemo(() => {
@@ -1137,8 +1227,9 @@ function App() {
       setObjectWord(null)
     }
 
-    speakText(item.label)
-    setLastSpoken(item.label)
+    const spoken = getTileSpeechText(item)
+    speakText(spoken, voicePreference)
+    setLastSpoken(spoken)
     setLiveAnnouncement(`Subject ${item.label} selected.`)
   }
 
@@ -1351,6 +1442,7 @@ function App() {
     setIsAdminOpen(false)
     setAdminTab('subject')
     setNewTileName('')
+    setNewTileSpoken('')
     setNewTileImage('')
     setNewTileNameError('')
     setRestoreDraft(null)
@@ -1411,18 +1503,21 @@ function App() {
     setCreatedToasts((current) => current.filter((toast) => toast.tone !== 'error'))
   }
 
-  const createNewTile = (label, image, scope) => {
+  const createNewTile = (label, spoken, image, scope) => {
     const normalizedLabel = String(label || '').slice(0, TILE_LABEL_MAX_LENGTH)
+    const normalizedSpoken = String(spoken || '').slice(0, TILE_SPOKEN_MAX_LENGTH)
     const fallbackBackground = scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope)
     return {
       id: toTileId(normalizedLabel),
       label: normalizedLabel,
+      spoken: normalizedSpoken,
       image: image || makeBadgeImage(normalizedLabel, fallbackBackground),
     }
   }
 
   const onAddTile = () => {
     const label = newTileName.trim().slice(0, TILE_LABEL_MAX_LENGTH)
+    const spoken = newTileSpoken.trim().slice(0, TILE_SPOKEN_MAX_LENGTH)
     if (!label) {
       setNewTileNameError('Tile name is required.')
       return
@@ -1430,7 +1525,7 @@ function App() {
 
     setNewTileNameError('')
 
-    const tile = createNewTile(label, newTileImage.trim(), adminTab)
+    const tile = createNewTile(label, spoken, newTileImage.trim(), adminTab)
 
     if (adminTab === 'subject') {
       setSubjects((current) => [...current, tile])
@@ -1460,13 +1555,16 @@ function App() {
     addCreatedToast(`${createdTypeLabel} tile '${label}' created.`, adminTab)
     setLiveAnnouncement(`${createdTypeLabel} tile ${label} created.`)
     setNewTileName('')
+    setNewTileSpoken('')
     setNewTileImage('')
   }
 
   const onEditTile = (scope, id, field, value) => {
     const normalizedValue = field === 'label'
       ? String(value || '').slice(0, TILE_LABEL_MAX_LENGTH)
-      : value
+      : field === 'spoken'
+        ? String(value || '').slice(0, TILE_SPOKEN_MAX_LENGTH)
+        : value
 
     const applyEdit = (item) => {
       if (item.id !== id) {
@@ -2007,6 +2105,7 @@ function App() {
     setVerbs(restoreDraft.config.verbs)
     setObjectsByVerb(restoreDraft.config.objectsByVerb)
     setQuickWords(normalizeQuickWords(restoreDraft.config.quickWords))
+    setVoicePreference(normalizeVoicePreference(restoreDraft.config.voicePreference))
     setSubject(null)
     setVerb(null)
     setObjectWord(null)
@@ -2045,6 +2144,24 @@ function App() {
       0,
     )
     : 0
+  const uniqueAvailableVoices = useMemo(() => {
+    const seen = new Set()
+
+    return availableVoices.filter((voice) => {
+      const id = getVoicePreferenceId(voice)
+
+      if (!id || seen.has(id)) {
+        return false
+      }
+
+      seen.add(id)
+      return true
+    })
+  }, [availableVoices])
+  const isSavedVoiceUnavailable = Boolean(
+    voicePreference
+    && !uniqueAvailableVoices.some((voice) => getVoicePreferenceId(voice) === voicePreference),
+  )
   const activeQuickWords = useMemo(
     () => quickWords.filter((item) => typeof item?.label === 'string' && item.label.trim()),
     [quickWords],
@@ -2081,31 +2198,50 @@ function App() {
     }
 
     if (subject) {
-      const phrase = `${subject.label} ${item.label.toLowerCase()}`
-      speakText(phrase)
+      const phrase = `${getTileSpeechText(subject)} ${getTileSpeechText(item, true)}`
+      speakText(phrase, voicePreference)
       setLastSpoken(phrase)
       setLiveAnnouncement(`Verb ${item.label} selected.`)
       return
     }
 
-    speakText(item.label)
-    setLastSpoken(item.label)
+    const spoken = getTileSpeechText(item)
+    speakText(spoken, voicePreference)
+    setLastSpoken(spoken)
     setLiveAnnouncement(`Verb ${item.label} selected.`)
   }
 
   const onSelectObject = (item) => {
     setObjectWord(item)
     const phrase = enhanceSentence(subject, verb, item)
-    const spoken = phrase || item.label
-    speakText(spoken)
+    const spoken = phrase || getTileSpeechText(item)
+    speakText(spoken, voicePreference)
     setLastSpoken(spoken)
     setLiveAnnouncement(`Object ${item.label} selected.`)
   }
 
   const onQuickWord = (item) => {
-    speakText(item.label)
-    setLastSpoken(item.label)
+    const spoken = getTileSpeechText(item)
+    speakText(spoken, voicePreference)
+    setLastSpoken(spoken)
     setLiveAnnouncement(`Spoke ${item.label}.`)
+  }
+
+  const onPreviewVoice = () => {
+    speakText(VOICE_PREVIEW_TEXT, voicePreference)
+    setLiveAnnouncement('Playing voice preview.')
+  }
+
+  const onPreviewTileSpeech = (tile) => {
+    const spoken = getTileSpeechText(tile)
+
+    if (!spoken) {
+      setLiveAnnouncement('Add tile text or Speak as to preview.')
+      return
+    }
+
+    speakText(spoken, voicePreference)
+    setLiveAnnouncement(`Previewing ${tile.label || 'tile'} pronunciation.`)
   }
 
   const onRestart = () => {
@@ -2124,7 +2260,7 @@ function App() {
     const fallback = sentencePreview.replaceAll('  •  ', ' ')
     const replayText = sentence || lastSpoken || fallback
 
-    speakText(replayText)
+    speakText(replayText, voicePreference)
     if (replayText) {
       setLiveAnnouncement(`Replayed: ${replayText}`)
     }
@@ -2666,6 +2802,32 @@ function App() {
               </p>
             )}
 
+            <label className="admin-voice-row">
+              <span>Voice</span>
+              <div className="admin-voice-controls">
+                <select
+                  value={voicePreference}
+                  onChange={(event) => {
+                    setVoicePreference(event.target.value)
+                    setLiveAnnouncement(event.target.value ? 'Voice updated.' : 'Default voice selected.')
+                  }}
+                >
+                  <option value="">System default</option>
+                  {isSavedVoiceUnavailable && (
+                    <option value={voicePreference}>Saved voice (not available on this device)</option>
+                  )}
+                  {uniqueAvailableVoices.map((voice) => (
+                    <option key={getVoicePreferenceId(voice)} value={getVoicePreferenceId(voice)}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="admin-btn ghost" onClick={onPreviewVoice}>
+                  Preview voice
+                </button>
+              </div>
+            </label>
+
             <div className="admin-tabs">
               <button
                 type="button"
@@ -2757,6 +2919,13 @@ function App() {
                       maxLength={TILE_LABEL_MAX_LENGTH}
                       aria-invalid={Boolean(newTileNameError)}
                       aria-describedby={newTileNameError ? 'admin-new-tile-name-error' : undefined}
+                    />
+                    <input
+                      type="text"
+                      value={newTileSpoken}
+                      maxLength={TILE_SPOKEN_MAX_LENGTH}
+                      onChange={(event) => setNewTileSpoken(event.target.value.slice(0, TILE_SPOKEN_MAX_LENGTH))}
+                      placeholder="Speak as (optional)"
                     />
                     {newTileNameError && <p className="admin-inline-error" id="admin-new-tile-name-error" role="alert">{newTileNameError}</p>}
                     {newTileImage && (
@@ -2880,6 +3049,22 @@ function App() {
                         )
                       }
                     />
+                    <input
+                      type="text"
+                      value={item.spoken || ''}
+                      maxLength={TILE_SPOKEN_MAX_LENGTH}
+                      onChange={(event) =>
+                        onEditTile(adminTab, item.id, 'spoken', event.target.value)
+                      }
+                      placeholder="Speak as (optional)"
+                    />
+                    <button
+                      type="button"
+                      className="admin-btn ghost"
+                      onClick={() => onPreviewTileSpeech(item)}
+                    >
+                      Preview
+                    </button>
                     <label className="admin-btn admin-file-btn admin-upload-btn">
                       {item.image && !isGeneratedBadgeImage(item.image) ? 'Upload a new image' : 'Upload image'}
                       <input
