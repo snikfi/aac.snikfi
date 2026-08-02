@@ -26,6 +26,7 @@ const TILE_BADGE_SELECTED_BACKGROUNDS = {
 }
 const TILE_UPLOAD_MAX_SIZE = 512
 const TILE_UPLOAD_QUALITY = 0.82
+const TILE_LABEL_MAX_LENGTH = 38
 const QUICK_WORD_SLOT_COUNT = 5
 const QUICK_WORD_GENERATED_BACKGROUND = 'transparent'
 const QUICK_LIMIT_ERROR_MESSAGE = `Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items. Remove an existing quick tile before you add or copy another one.`
@@ -462,6 +463,7 @@ function App() {
   const exportDialogRef = useRef(null)
   const restoreDialogRef = useRef(null)
   const deleteDialogRef = useRef(null)
+  const removeImageDialogRef = useRef(null)
   const moveDialogRef = useRef(null)
   const lastFocusedElementRef = useRef(null)
   const [mobileTopStripHeight, setMobileTopStripHeight] = useState(104)
@@ -471,6 +473,7 @@ function App() {
   const [exportNotice, setExportNotice] = useState(null)
   const [restoreDraft, setRestoreDraft] = useState(null)
   const [deleteDraft, setDeleteDraft] = useState(null)
+  const [removeImageDraft, setRemoveImageDraft] = useState(null)
   const [moveObjectDraft, setMoveObjectDraft] = useState(null)
   const [deletedToasts, setDeletedToasts] = useState([])
   const [createdToasts, setCreatedToasts] = useState([])
@@ -797,6 +800,8 @@ function App() {
     ? 'pin'
     : restoreDraft
       ? 'restore'
+      : removeImageDraft
+        ? 'remove-image'
       : deleteDraft
         ? 'delete'
         : moveObjectDraft
@@ -829,6 +834,10 @@ function App() {
         return deleteDialogRef.current
       }
 
+      if (activeDialog === 'remove-image') {
+        return removeImageDialogRef.current
+      }
+
       if (activeDialog === 'move') {
         return moveDialogRef.current
       }
@@ -853,6 +862,11 @@ function App() {
 
       if (activeDialog === 'delete') {
         onCancelDeleteTile()
+        return
+      }
+
+      if (activeDialog === 'remove-image') {
+        onCancelRemoveTileImage()
         return
       }
 
@@ -1244,7 +1258,96 @@ function App() {
     }
   }
 
+  const removeAdminTileById = (scope, tileId, sourceVerbId = objectVerbId) => {
+    if (!tileId) {
+      return
+    }
+
+    if (scope === 'subject') {
+      setSubjects((current) => current.filter((item) => item.id !== tileId))
+      return
+    }
+
+    if (scope === 'verb') {
+      setVerbs((current) => current.filter((item) => item.id !== tileId))
+      setObjectsByVerb((current) => {
+        const next = { ...current }
+        delete next[tileId]
+        return next
+      })
+      return
+    }
+
+    if (scope === 'object' && sourceVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [sourceVerbId]: (current[sourceVerbId] || []).filter((item) => item.id !== tileId),
+      }))
+      return
+    }
+
+    if (scope === 'quick') {
+      setQuickWords((current) => current.filter((item) => item.id !== tileId))
+    }
+  }
+
+  const onAdminTileLabelBlur = (
+    scope,
+    tileId,
+    rawValue,
+    currentImage,
+    sourceVerbId = objectVerbId,
+  ) => {
+    if (String(rawValue || '').trim()) {
+      return
+    }
+
+    if (currentImage && !isGeneratedBadgeImage(currentImage)) {
+      return
+    }
+
+    removeAdminTileById(scope, tileId, sourceVerbId)
+    setLiveAnnouncement('Empty tile removed.')
+  }
+
+  const removeEmptyAdminTiles = () => {
+    const isBlank = (item) => {
+      const hasLabel = typeof item?.label === 'string' && item.label.trim()
+      const hasCustomImage = typeof item?.image === 'string'
+        && item.image.trim()
+        && !isGeneratedBadgeImage(item.image)
+
+      return !hasLabel && !hasCustomImage
+    }
+
+    setSubjects((current) => current.filter((item) => !isBlank(item)))
+    setQuickWords((current) => current.filter((item) => !isBlank(item)))
+
+    let keptVerbIds = []
+    setVerbs((current) => {
+      const next = current.filter((item) => !isBlank(item))
+      keptVerbIds = next.map((item) => item.id)
+      return next
+    })
+
+    setObjectsByVerb((current) => {
+      const allowedVerbIds = new Set(keptVerbIds)
+      const next = {}
+
+      Object.entries(current).forEach(([verbId, list]) => {
+        if (!allowedVerbIds.has(verbId)) {
+          return
+        }
+
+        next[verbId] = Array.isArray(list) ? list.filter((item) => !isBlank(item)) : []
+      })
+
+      return next
+    })
+  }
+
   const onCloseAdmin = () => {
+    removeEmptyAdminTiles()
     setIsAdminOpen(false)
     setAdminTab('subject')
     setNewTileName('')
@@ -1253,6 +1356,7 @@ function App() {
     setRestoreDraft(null)
     setExportNotice(null)
     setDeleteDraft(null)
+    setRemoveImageDraft(null)
     setMoveObjectDraft(null)
     setBackupStatus('')
     setNewTileNameError('')
@@ -1308,16 +1412,17 @@ function App() {
   }
 
   const createNewTile = (label, image, scope) => {
+    const normalizedLabel = String(label || '').slice(0, TILE_LABEL_MAX_LENGTH)
     const fallbackBackground = scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope)
     return {
-      id: toTileId(label),
-      label,
-      image: image || makeBadgeImage(label, fallbackBackground),
+      id: toTileId(normalizedLabel),
+      label: normalizedLabel,
+      image: image || makeBadgeImage(normalizedLabel, fallbackBackground),
     }
   }
 
   const onAddTile = () => {
-    const label = newTileName.trim()
+    const label = newTileName.trim().slice(0, TILE_LABEL_MAX_LENGTH)
     if (!label) {
       setNewTileNameError('Tile name is required.')
       return
@@ -1359,16 +1464,20 @@ function App() {
   }
 
   const onEditTile = (scope, id, field, value) => {
+    const normalizedValue = field === 'label'
+      ? String(value || '').slice(0, TILE_LABEL_MAX_LENGTH)
+      : value
+
     const applyEdit = (item) => {
       if (item.id !== id) {
         return item
       }
 
-      const nextItem = { ...item, [field]: value }
+      const nextItem = { ...item, [field]: normalizedValue }
 
       if (field === 'label' && isGeneratedBadgeImage(item.image)) {
         const badgeBackground = scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope)
-        nextItem.image = makeBadgeImage(value || '+', badgeBackground)
+        nextItem.image = makeBadgeImage(normalizedValue || '+', badgeBackground)
       }
 
       return nextItem
@@ -1468,6 +1577,71 @@ function App() {
     setRestoreDraft(null)
     setMoveObjectDraft(null)
     setDeleteDraft({ scope, tile, index })
+  }
+
+  const onRequestRemoveTileImage = (scope, tile, sourceVerbId = objectVerbId) => {
+    if (!tile || !tile.id || !tile.image || isGeneratedBadgeImage(tile.image)) {
+      return
+    }
+
+    setExportNotice(null)
+    setRestoreDraft(null)
+    setDeleteDraft(null)
+    setMoveObjectDraft(null)
+    setRemoveImageDraft({
+      scope,
+      tileId: tile.id,
+      tileLabel: tile.label,
+      sourceVerbId,
+    })
+  }
+
+  const onCancelRemoveTileImage = () => {
+    setRemoveImageDraft(null)
+  }
+
+  const onConfirmRemoveTileImage = () => {
+    if (!removeImageDraft) {
+      return
+    }
+
+    const { scope, tileId, tileLabel, sourceVerbId } = removeImageDraft
+    setRemoveImageDraft(null)
+
+    const normalizedLabel = String(tileLabel || '').trim()
+    const replacementImage = makeBadgeImage(
+      normalizedLabel || '+',
+      scope === 'quick' ? QUICK_WORD_GENERATED_BACKGROUND : getTileBadgeBackground(scope),
+    )
+
+    if (scope === 'subject') {
+      setSubjects((current) =>
+        current.map((item) => (item.id === tileId ? { ...item, image: replacementImage } : item)),
+      )
+    } else if (scope === 'verb') {
+      setVerbs((current) =>
+        current.map((item) => (item.id === tileId ? { ...item, image: replacementImage } : item)),
+      )
+    } else if (scope === 'object' && sourceVerbId) {
+      setObjectsByVerb((current) => ({
+        ...current,
+        [sourceVerbId]: (current[sourceVerbId] || []).map((item) =>
+          item.id === tileId ? { ...item, image: replacementImage } : item,
+        ),
+      }))
+    } else if (scope === 'quick') {
+      setQuickWords((current) =>
+        current.map((item) => (item.id === tileId ? { ...item, image: replacementImage } : item)),
+      )
+    }
+
+    if (!normalizedLabel) {
+      removeAdminTileById(scope, tileId, sourceVerbId)
+      setLiveAnnouncement('Empty tile removed.')
+      return
+    }
+
+    setLiveAnnouncement('Tile image removed.')
   }
 
   const onRequestMoveObjectTile = (tile, index) => {
@@ -1584,7 +1758,7 @@ function App() {
   }
 
   const onDuplicateTile = (scope, tile, index) => {
-    const duplicateLabel = `${tile.label} copy`
+    const duplicateLabel = `${tile.label} copy`.slice(0, TILE_LABEL_MAX_LENGTH)
     const duplicate = {
       ...structuredClone(tile),
       id: toTileId(tile.label),
@@ -2574,12 +2748,13 @@ function App() {
                       type="text"
                       value={newTileName}
                       onChange={(event) => {
-                        setNewTileName(event.target.value)
+                        setNewTileName(event.target.value.slice(0, TILE_LABEL_MAX_LENGTH))
                         if (newTileNameError) {
                           setNewTileNameError('')
                         }
                       }}
                       placeholder="Tile name"
+                      maxLength={TILE_LABEL_MAX_LENGTH}
                       aria-invalid={Boolean(newTileNameError)}
                       aria-describedby={newTileNameError ? 'admin-new-tile-name-error' : undefined}
                     />
@@ -2691,8 +2866,18 @@ function App() {
                     <input
                       type="text"
                       value={item.label}
+                      maxLength={TILE_LABEL_MAX_LENGTH}
                       onChange={(event) =>
                         onEditTile(adminTab, item.id, 'label', event.target.value)
+                      }
+                      onBlur={(event) =>
+                        onAdminTileLabelBlur(
+                          adminTab,
+                          item.id,
+                          event.target.value,
+                          item.image,
+                          adminTab === 'object' ? objectVerbId : '',
+                        )
                       }
                     />
                     <label className="admin-btn admin-file-btn admin-upload-btn">
@@ -2705,6 +2890,18 @@ function App() {
                         }
                       />
                     </label>
+                    <button
+                      type="button"
+                      className="admin-btn ghost"
+                      onClick={() => onRequestRemoveTileImage(
+                        adminTab,
+                        item,
+                        adminTab === 'object' ? objectVerbId : '',
+                      )}
+                      disabled={!item.image || isGeneratedBadgeImage(item.image)}
+                    >
+                      Delete image
+                    </button>
                   </div>
                   <div className={`admin-item-actions ${adminTab === 'object' ? 'object-actions' : ''} ${adminTab === 'quick' ? 'quick-actions' : ''}`}>
                     <button
@@ -2887,6 +3084,33 @@ function App() {
                     Delete
                   </button>
                   <button type="button" className="admin-btn ghost" onClick={onCancelDeleteTile}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {removeImageDraft && (
+            <>
+              <div className="admin-delete-backdrop" onClick={onCancelRemoveTileImage} aria-hidden="true" />
+              <div
+                className="admin-delete-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Confirm remove tile image"
+                ref={removeImageDialogRef}
+                tabIndex={-1}
+              >
+                <h3>Delete tile image?</h3>
+                <p>
+                  Remove image from &quot;{removeImageDraft.tileLabel || 'this tile'}&quot;?
+                </p>
+                <div className="admin-delete-actions">
+                  <button type="button" className="admin-btn danger" onClick={onConfirmRemoveTileImage}>
+                    Delete image
+                  </button>
+                  <button type="button" className="admin-btn ghost" onClick={onCancelRemoveTileImage}>
                     Cancel
                   </button>
                 </div>
