@@ -28,6 +28,16 @@ const TILE_UPLOAD_MAX_SIZE = 512
 const TILE_UPLOAD_QUALITY = 0.82
 const QUICK_WORD_SLOT_COUNT = 5
 const QUICK_WORD_GENERATED_BACKGROUND = 'transparent'
+const QUICK_LIMIT_ERROR_MESSAGE = `Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items. Remove an existing quick tile before you add or copy another one.`
+const MOBILE_LAYOUT_QUERY = '(max-width: 61.25rem)'
+const DIALOG_FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
 
 function formatDurationLabel(durationMs) {
   const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000))
@@ -35,6 +45,34 @@ function formatDurationLabel(durationMs) {
   const seconds = totalSeconds % 60
 
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function detectNarrowViewport() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.matchMedia(MOBILE_LAYOUT_QUERY).matches
+}
+
+function detectTouchLikeDevice() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches
+  const hasNoHover = window.matchMedia('(hover: none)').matches
+  const hasTouchPoints = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+
+  return hasCoarsePointer || hasNoHover || hasTouchPoints
+}
+
+function getFocusableElements(container) {
+  if (!container) {
+    return []
+  }
+
+  return Array.from(container.querySelectorAll(DIALOG_FOCUSABLE_SELECTOR))
 }
 
 function isLocalDevAdminMode() {
@@ -337,17 +375,29 @@ function speakText(text) {
 }
 
 function enhanceSentence(subject, verb, objectWord) {
-  if (!subject || !verb) {
-    return ''
-  }
-
   const spokenObject = objectWord?.spoken || objectWord?.label?.toLowerCase()
 
-  if (!spokenObject) {
-    return `${subject.label} ${verb.label.toLowerCase()}.`
+  if (subject && verb) {
+    if (!spokenObject) {
+      return `${subject.label} ${verb.label.toLowerCase()}.`
+    }
+
+    return `${subject.label} ${verb.label.toLowerCase()} ${spokenObject}.`
   }
 
-  return `${subject.label} ${verb.label.toLowerCase()} ${spokenObject}.`
+  if (verb && spokenObject) {
+    return `${verb.label} ${spokenObject}.`
+  }
+
+  if (verb) {
+    return `${verb.label}.`
+  }
+
+  if (subject && spokenObject) {
+    return `${subject.label} ${spokenObject}.`
+  }
+
+  return ''
 }
 
 function formatBackupTimestamp() {
@@ -380,13 +430,8 @@ function App() {
   const [objectWord, setObjectWord] = useState(null)
   const [lastSpoken, setLastSpoken] = useState('')
   const [isThreeStepMode, setIsThreeStepMode] = useState(true)
-  const [isMobileViewport, setIsMobileViewport] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false
-    }
-
-    return window.matchMedia('(max-width: 980px)').matches
-  })
+  const [isMobileViewport, setIsMobileViewport] = useState(() => detectNarrowViewport())
+  const [isTouchLikeDevice, setIsTouchLikeDevice] = useState(() => detectTouchLikeDevice())
 
   const [isPinOpen, setIsPinOpen] = useState(false)
   const [pinInput, setPinInput] = useState('')
@@ -405,12 +450,20 @@ function App() {
   const [newTileNameError, setNewTileNameError] = useState('')
   const [newTileImage, setNewTileImage] = useState('')
   const [adminSearchQuery, setAdminSearchQuery] = useState('')
+  const [liveAnnouncement, setLiveAnnouncement] = useState('')
   const [syncState, setSyncState] = useState(
     isRemoteSyncEnabled() ? 'connecting' : 'local-only',
   )
   const [isSyncTipOpen, setIsSyncTipOpen] = useState(false)
   const syncTipRef = useRef(null)
   const topStripRef = useRef(null)
+  const pinDialogRef = useRef(null)
+  const adminDialogRef = useRef(null)
+  const exportDialogRef = useRef(null)
+  const restoreDialogRef = useRef(null)
+  const deleteDialogRef = useRef(null)
+  const moveDialogRef = useRef(null)
+  const lastFocusedElementRef = useRef(null)
   const [mobileTopStripHeight, setMobileTopStripHeight] = useState(104)
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
@@ -688,7 +741,7 @@ function App() {
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClearPin()
+        setIsPinOpen(false)
         return
       }
 
@@ -710,18 +763,171 @@ function App() {
       return undefined
     }
 
-    const media = window.matchMedia('(max-width: 980px)')
-    const onMediaChange = () => setIsMobileViewport(media.matches)
+    const media = window.matchMedia(MOBILE_LAYOUT_QUERY)
+    const coarseMedia = window.matchMedia('(pointer: coarse)')
+    const hoverMedia = window.matchMedia('(hover: none)')
+    const onMediaChange = () => {
+      setIsMobileViewport(detectNarrowViewport())
+      setIsTouchLikeDevice(detectTouchLikeDevice())
+    }
     onMediaChange()
 
     if (typeof media.addEventListener === 'function') {
       media.addEventListener('change', onMediaChange)
-      return () => media.removeEventListener('change', onMediaChange)
+      coarseMedia.addEventListener('change', onMediaChange)
+      hoverMedia.addEventListener('change', onMediaChange)
+      return () => {
+        media.removeEventListener('change', onMediaChange)
+        coarseMedia.removeEventListener('change', onMediaChange)
+        hoverMedia.removeEventListener('change', onMediaChange)
+      }
     }
 
     media.addListener(onMediaChange)
-    return () => media.removeListener(onMediaChange)
+    coarseMedia.addListener(onMediaChange)
+    hoverMedia.addListener(onMediaChange)
+    return () => {
+      media.removeListener(onMediaChange)
+      coarseMedia.removeListener(onMediaChange)
+      hoverMedia.removeListener(onMediaChange)
+    }
   }, [])
+
+  const activeDialog = isPinOpen
+    ? 'pin'
+    : restoreDraft
+      ? 'restore'
+      : deleteDraft
+        ? 'delete'
+        : moveObjectDraft
+          ? 'move'
+          : exportNotice && !restoreDraft && !deleteDraft
+            ? 'export'
+            : isAdminOpen
+              ? 'admin'
+              : null
+
+  useEffect(() => {
+    if (!activeDialog) {
+      lastFocusedElementRef.current?.focus?.()
+      lastFocusedElementRef.current = null
+      return undefined
+    }
+
+    lastFocusedElementRef.current = document.activeElement
+
+    const resolveDialog = () => {
+      if (activeDialog === 'pin') {
+        return pinDialogRef.current
+      }
+
+      if (activeDialog === 'restore') {
+        return restoreDialogRef.current
+      }
+
+      if (activeDialog === 'delete') {
+        return deleteDialogRef.current
+      }
+
+      if (activeDialog === 'move') {
+        return moveDialogRef.current
+      }
+
+      if (activeDialog === 'export') {
+        return exportDialogRef.current
+      }
+
+      return adminDialogRef.current
+    }
+
+    const closeDialog = () => {
+      if (activeDialog === 'pin') {
+        setIsPinOpen(false)
+        return
+      }
+
+      if (activeDialog === 'restore') {
+        onCancelRestore()
+        return
+      }
+
+      if (activeDialog === 'delete') {
+        onCancelDeleteTile()
+        return
+      }
+
+      if (activeDialog === 'move') {
+        onCancelMoveObjectTile()
+        return
+      }
+
+      if (activeDialog === 'export') {
+        onCloseExportNotice()
+        return
+      }
+
+      onCloseAdmin()
+    }
+
+    let frame = 0
+
+    frame = window.requestAnimationFrame(() => {
+      const dialogElement = resolveDialog()
+      const focusable = getFocusableElements(dialogElement)
+      if (focusable[0]) {
+        focusable[0].focus()
+      } else {
+        dialogElement?.focus?.()
+      }
+    })
+
+    const onKeyDown = (event) => {
+      const dialogElement = resolveDialog()
+      if (!dialogElement) {
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeDialog()
+        return
+      }
+
+      if (event.key !== 'Tab') {
+        return
+      }
+
+      const focusable = getFocusableElements(dialogElement)
+      if (!focusable.length) {
+        event.preventDefault()
+        return
+      }
+
+      const currentIndex = focusable.indexOf(document.activeElement)
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+
+      if (event.shiftKey) {
+        if (document.activeElement === first || currentIndex === -1) {
+          event.preventDefault()
+          last.focus()
+        }
+        return
+      }
+
+      if (document.activeElement === last || currentIndex === -1) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [activeDialog])
 
   useEffect(() => {
     const element = topStripRef.current
@@ -919,6 +1125,7 @@ function App() {
 
     speakText(item.label)
     setLastSpoken(item.label)
+    setLiveAnnouncement(`Subject ${item.label} selected.`)
   }
 
   const onOpenPin = () => {
@@ -1051,6 +1258,7 @@ function App() {
     setNewTileNameError('')
     setDeletedToasts([])
     setCreatedToasts([])
+    setLiveAnnouncement('Admin panel closed.')
   }
 
   const onLockAdmin = () => {
@@ -1077,6 +1285,26 @@ function App() {
     window.setTimeout(() => {
       setCreatedToasts((current) => current.filter((toast) => toast.toastId !== toastId))
     }, 3000)
+  }
+
+  const addAdminErrorToast = (message) => {
+    const toastId = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+    setCreatedToasts((current) => [...current, { toastId, message, tone: 'error' }])
+
+    window.setTimeout(() => {
+      setCreatedToasts((current) => current.filter((toast) => toast.toastId !== toastId))
+    }, 5000)
+  }
+
+  const onChangeAdminTab = (nextTab) => {
+    setAdminTab(nextTab)
+
+    if (newTileNameError === QUICK_LIMIT_ERROR_MESSAGE) {
+      setNewTileNameError('')
+    }
+
+    setCreatedToasts((current) => current.filter((toast) => toast.tone !== 'error'))
   }
 
   const createNewTile = (label, image, scope) => {
@@ -1114,7 +1342,9 @@ function App() {
       }))
     } else if (adminTab === 'quick') {
       if (quickWords.length >= QUICK_WORD_SLOT_COUNT) {
-        setNewTileNameError(`Quick tiles support up to ${QUICK_WORD_SLOT_COUNT} items. Update or delete a tile below to create a new quick tile.`)
+        setNewTileNameError(QUICK_LIMIT_ERROR_MESSAGE)
+        addAdminErrorToast(QUICK_LIMIT_ERROR_MESSAGE)
+        setLiveAnnouncement('Quick tiles are full. Remove one tile before adding or copying.')
         return
       }
 
@@ -1123,6 +1353,7 @@ function App() {
 
     const createdTypeLabel = adminTab.charAt(0).toUpperCase() + adminTab.slice(1)
     addCreatedToast(`${createdTypeLabel} tile '${label}' created.`, adminTab)
+    setLiveAnnouncement(`${createdTypeLabel} tile ${label} created.`)
     setNewTileName('')
     setNewTileImage('')
   }
@@ -1306,6 +1537,7 @@ function App() {
 
     const { scope, tile, index } = deleteDraft
     setDeleteDraft(null)
+    setLiveAnnouncement(`Tile ${tile.label} deleted.`)
 
     if (scope === 'subject') {
       setDeletedToasts((current) => [...current, createDeletedToast({ scope, tile, index })])
@@ -1400,10 +1632,18 @@ function App() {
     }
 
     if (scope === 'quick') {
+      if (quickWords.length >= QUICK_WORD_SLOT_COUNT) {
+        setNewTileNameError(QUICK_LIMIT_ERROR_MESSAGE)
+        addAdminErrorToast(QUICK_LIMIT_ERROR_MESSAGE)
+        setLiveAnnouncement('Quick tiles are full. Remove one tile before adding or copying.')
+        return
+      }
+
+      setNewTileNameError('')
       setQuickWords((current) => {
         const next = [...current]
         next.splice(index + 1, 0, duplicate)
-        return next.slice(0, QUICK_WORD_SLOT_COUNT)
+        return next
       })
     }
   }
@@ -1625,6 +1865,12 @@ function App() {
     0,
   )
   const quickTileCount = quickWords.length
+  const restoreObjectCount = restoreDraft
+    ? Object.values(restoreDraft.config.objectsByVerb || {}).reduce(
+      (total, list) => total + (Array.isArray(list) ? list.length : 0),
+      0,
+    )
+    : 0
   const activeQuickWords = useMemo(
     () => quickWords.filter((item) => typeof item?.label === 'string' && item.label.trim()),
     [quickWords],
@@ -1642,6 +1888,16 @@ function App() {
   const isMobileFreeModeLayout = !isThreeStepMode && isMobileViewport
   const isVerbColumnActive = !isThreeStepMode || Boolean(subject)
   const isObjectColumnActive = !isThreeStepMode || Boolean(verb)
+  const showViewportDebugBadge = import.meta.env.DEV
+  const debugViewportLabel = showViewportDebugBadge
+    ? [
+      `narrow:${isMobileViewport ? 'yes' : 'no'}`,
+      `touch:${isTouchLikeDevice ? 'yes' : 'no'}(info)`,
+      `layout:${isMobileFreeModeLayout ? 'mobile-free' : 'desktop'}`,
+      `mode:${isThreeStepMode ? '3-step' : 'free'}`,
+      `dpr:${typeof window !== 'undefined' ? Number(window.devicePixelRatio || 1).toFixed(2) : '1.00'}`,
+    ].join(' | ')
+    : ''
 
   const onSelectVerb = (item) => {
     setVerb(item)
@@ -1654,11 +1910,13 @@ function App() {
       const phrase = `${subject.label} ${item.label.toLowerCase()}`
       speakText(phrase)
       setLastSpoken(phrase)
+      setLiveAnnouncement(`Verb ${item.label} selected.`)
       return
     }
 
     speakText(item.label)
     setLastSpoken(item.label)
+    setLiveAnnouncement(`Verb ${item.label} selected.`)
   }
 
   const onSelectObject = (item) => {
@@ -1667,11 +1925,13 @@ function App() {
     const spoken = phrase || item.label
     speakText(spoken)
     setLastSpoken(spoken)
+    setLiveAnnouncement(`Object ${item.label} selected.`)
   }
 
   const onQuickWord = (item) => {
     speakText(item.label)
     setLastSpoken(item.label)
+    setLiveAnnouncement(`Spoke ${item.label}.`)
   }
 
   const onRestart = () => {
@@ -1682,6 +1942,7 @@ function App() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel()
     }
+    setLiveAnnouncement('Selections cleared.')
   }
 
   const onRepeat = () => {
@@ -1690,24 +1951,81 @@ function App() {
     const replayText = sentence || lastSpoken || fallback
 
     speakText(replayText)
+    if (replayText) {
+      setLiveAnnouncement(`Replayed: ${replayText}`)
+    }
   }
 
   const onBackspace = () => {
     if (objectWord) {
+      setLiveAnnouncement('Object selection cleared.')
       setObjectWord(null)
       return
     }
 
     if (verb) {
+      setLiveAnnouncement('Verb selection cleared.')
       setVerb(null)
       setObjectWord(null)
       return
     }
 
     if (subject) {
+      setLiveAnnouncement('Subject selection cleared.')
       setSubject(null)
       setVerb(null)
       setObjectWord(null)
+    }
+  }
+
+  const onTileGridKeyDown = (event) => {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+      return
+    }
+
+    const currentButton = event.target.closest('button')
+    if (!currentButton) {
+      return
+    }
+
+    const buttons = Array.from(event.currentTarget.querySelectorAll('button:not([disabled])'))
+    if (!buttons.length) {
+      return
+    }
+
+    const currentIndex = buttons.indexOf(currentButton)
+    if (currentIndex < 0) {
+      return
+    }
+
+    const gridTemplate = window.getComputedStyle(event.currentTarget).gridTemplateColumns || ''
+    const columns = Math.max(
+      1,
+      gridTemplate
+        .split(' ')
+        .map((part) => part.trim())
+        .filter(Boolean).length,
+    )
+
+    let nextIndex = currentIndex
+
+    if (event.key === 'ArrowRight') {
+      nextIndex = Math.min(buttons.length - 1, currentIndex + 1)
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = Math.max(0, currentIndex - 1)
+    } else if (event.key === 'ArrowDown') {
+      nextIndex = Math.min(buttons.length - 1, currentIndex + columns)
+    } else if (event.key === 'ArrowUp') {
+      nextIndex = Math.max(0, currentIndex - columns)
+    } else if (event.key === 'Home') {
+      nextIndex = 0
+    } else if (event.key === 'End') {
+      nextIndex = buttons.length - 1
+    }
+
+    if (nextIndex !== currentIndex) {
+      event.preventDefault()
+      buttons[nextIndex].focus()
     }
   }
 
@@ -1719,6 +2037,7 @@ function App() {
           type="button"
           className="side-tile"
           onClick={() => onQuickWord(item)}
+          aria-label={`Quick word ${item.label}`}
         >
           <img src={item.image} alt="" aria-hidden="true" />
           <span>{item.label}</span>
@@ -1782,6 +2101,14 @@ function App() {
       data-node-id="1:59"
       style={{ '--mobile-top-strip-height': `${mobileTopStripHeight}px` }}
     >
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {liveAnnouncement}
+      </div>
+      {showViewportDebugBadge && (
+        <div className="viewport-debug-badge" aria-hidden="true">
+          {debugViewportLabel}
+        </div>
+      )}
       <header ref={topStripRef} className="top-strip">
         <div className="top-left-group">
           <div className="top-left">
@@ -1820,7 +2147,7 @@ function App() {
           </button>
         </div>
         <div className="top-controls">
-          <button type="button" className="control-btn play-btn" onClick={onRepeat}>
+          <button type="button" className="control-btn play-btn" onClick={onRepeat} aria-label="Play sentence">
             <div className="icon-card-bg" aria-hidden="true" />
             <svg className="icon-card-svg play-svg" width="34.9411" height="34.9411" viewBox="0 0 34.9411 34.9411" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
               <path
@@ -1847,7 +2174,7 @@ function App() {
             </svg>
             <div className="icon-card-label play-label">Play</div>
           </button>
-          <button type="button" className="control-btn refresh-btn" onClick={onRestart}>
+          <button type="button" className="control-btn refresh-btn" onClick={onRestart} aria-label="Clear sentence">
             <div className="icon-card-bg" aria-hidden="true" />
             <svg className="icon-card-svg refresh-svg" width="34.9411" height="34.9411" viewBox="0 0 34.9411 34.9411" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
               <path
@@ -1877,13 +2204,15 @@ function App() {
           </div>
           <section className="mobile-free-content" aria-label="AAC communication grid">
             <article className="subject-panel mobile-free-panel">
-              <div className="subject-grid">
+              <div className="subject-grid" onKeyDown={onTileGridKeyDown}>
                 {subjects.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     className={`subject-tile ${subject?.id === item.id ? 'selected' : ''}`}
                     onClick={() => onSelectSubject(item)}
+                    aria-label={item.label}
+                    aria-pressed={subject?.id === item.id}
                   >
                     <img
                       src={getTileDisplayImage(item, 'subject', subject?.id === item.id)}
@@ -1898,13 +2227,15 @@ function App() {
             </article>
 
             <article className="verb-column active mobile-free-panel" aria-label="Verb column">
-              <div className="verb-grid">
+              <div className="verb-grid" onKeyDown={onTileGridKeyDown}>
                 {verbs.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     className={`verb-tile ${verb?.id === item.id ? 'selected' : ''}`}
                     onClick={() => onSelectVerb(item)}
+                    aria-label={item.label}
+                    aria-pressed={verb?.id === item.id}
                   >
                     <img
                       src={getTileDisplayImage(item, 'verb', verb?.id === item.id)}
@@ -1919,7 +2250,7 @@ function App() {
             </article>
 
             <article className="object-column active mobile-free-panel" aria-label="Object column">
-              <div className="object-grid">
+              <div className="object-grid" onKeyDown={onTileGridKeyDown}>
                 {objectOptions.map((item) => (
                   <button
                     key={item.__sourceKey || item.id}
@@ -1930,6 +2261,10 @@ function App() {
                         : ''
                     }`}
                     onClick={() => onSelectObject(item)}
+                    aria-label={item.label}
+                    aria-pressed={Boolean(
+                      objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id),
+                    )}
                   >
                     <img
                       src={getTileDisplayImage(
@@ -1953,13 +2288,15 @@ function App() {
           {sideRail}
 
           <article className="subject-panel">
-            <div className="subject-grid">
+            <div className="subject-grid" onKeyDown={onTileGridKeyDown}>
               {subjects.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   className={`subject-tile ${subject?.id === item.id ? 'selected' : ''}`}
                   onClick={() => onSelectSubject(item)}
+                  aria-label={item.label}
+                  aria-pressed={subject?.id === item.id}
                 >
                   <img
                     src={getTileDisplayImage(item, 'subject', subject?.id === item.id)}
@@ -1973,15 +2310,17 @@ function App() {
             </div>
           </article>
 
-          <article className={`verb-column ${isVerbColumnActive ? 'active' : 'empty'}`} aria-label="Verb column">
+            <article className={`verb-column ${isVerbColumnActive ? 'active' : 'empty'}`} aria-label="Verb column">
             {isVerbColumnActive && (
-              <div className="verb-grid">
+              <div className="verb-grid" onKeyDown={onTileGridKeyDown}>
                 {verbs.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     className={`verb-tile ${verb?.id === item.id ? 'selected' : ''}`}
                     onClick={() => onSelectVerb(item)}
+                    aria-label={item.label}
+                    aria-pressed={verb?.id === item.id}
                   >
                     <img
                       src={getTileDisplayImage(item, 'verb', verb?.id === item.id)}
@@ -1998,7 +2337,7 @@ function App() {
 
           <article className={`object-column ${isObjectColumnActive ? 'active' : 'empty'}`} aria-label="Object column">
             {isObjectColumnActive && (
-              <div className="object-grid">
+              <div className="object-grid" onKeyDown={onTileGridKeyDown}>
                 {objectOptions.map((item) => (
                   <button
                     key={item.__sourceKey || item.id}
@@ -2009,6 +2348,10 @@ function App() {
                         : ''
                     }`}
                     onClick={() => onSelectObject(item)}
+                    aria-label={item.label}
+                    aria-pressed={Boolean(
+                      objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id),
+                    )}
                   >
                     <img
                       src={getTileDisplayImage(
@@ -2031,7 +2374,12 @@ function App() {
 
       {isPinOpen && (
         <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Admin code">
-          <div className="admin-pin-card">
+          <div
+            className="admin-pin-card"
+            ref={pinDialogRef}
+            tabIndex={-1}
+            aria-describedby={pinError ? 'admin-pin-error' : undefined}
+          >
             <h2>Enter admin code</h2>
             <div className="admin-pin-display" aria-live="polite" aria-label={`Code length ${pinInput.length} of ${ADMIN_PIN_MAX_LENGTH}`}>
               {pinInput ? '●'.repeat(pinInput.length) : 'Enter code'}
@@ -2073,7 +2421,7 @@ function App() {
                 Delete
               </button>
             </div>
-            {pinError && <p className="admin-error">{pinError}</p>}
+            {pinError && <p className="admin-error" id="admin-pin-error" role="alert">{pinError}</p>}
             {isAdminUnlockLocked && (
               <p className="admin-pin-status" role="status" aria-live="polite">
                 Try again in {formatDurationLabel(adminLockoutRemainingMs)}.
@@ -2098,7 +2446,7 @@ function App() {
 
       {isAdminOpen && (
         <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Tile admin">
-          <section className="admin-panel">
+          <section className="admin-panel" ref={adminDialogRef} tabIndex={-1}>
             <header className="admin-header">
               <div className="admin-title-row">
                 <h2>Tile Admin</h2>
@@ -2148,7 +2496,7 @@ function App() {
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'subject' ? 'active' : ''}`}
-                onClick={() => setAdminTab('subject')}
+                onClick={() => onChangeAdminTab('subject')}
               >
                 <span>Subject</span>
                 <span className="admin-tab-badge subject" aria-label={`${subjectTileCount} subject tiles`}>
@@ -2158,7 +2506,7 @@ function App() {
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'verb' ? 'active' : ''}`}
-                onClick={() => setAdminTab('verb')}
+                onClick={() => onChangeAdminTab('verb')}
               >
                 <span>Verb</span>
                 <span className="admin-tab-badge verb" aria-label={`${verbTileCount} verb tiles`}>
@@ -2168,7 +2516,7 @@ function App() {
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'object' ? 'active' : ''}`}
-                onClick={() => setAdminTab('object')}
+                onClick={() => onChangeAdminTab('object')}
               >
                 <span>Object</span>
                 <span className="admin-tab-badge object" aria-label={`${objectTileCount} object tiles`}>
@@ -2178,7 +2526,7 @@ function App() {
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'quick' ? 'active' : ''}`}
-                onClick={() => setAdminTab('quick')}
+                onClick={() => onChangeAdminTab('quick')}
               >
                 <span>Quick tiles</span>
                 <span className="admin-tab-badge quick" aria-label={`${quickTileCount} quick tiles`}>
@@ -2233,8 +2581,9 @@ function App() {
                       }}
                       placeholder="Tile name"
                       aria-invalid={Boolean(newTileNameError)}
+                      aria-describedby={newTileNameError ? 'admin-new-tile-name-error' : undefined}
                     />
-                    {newTileNameError && <p className="admin-inline-error" role="alert">{newTileNameError}</p>}
+                    {newTileNameError && <p className="admin-inline-error" id="admin-new-tile-name-error" role="alert">{newTileNameError}</p>}
                     {newTileImage && (
                       <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
                     )}
@@ -2377,7 +2726,7 @@ function App() {
                       className="admin-btn ghost"
                       onClick={() => onDuplicateTile(adminTab, item, sourceIndex)}
                     >
-                      Duplicate
+                      Copy
                     </button>
                     {adminTab === 'object' && (
                       <button
@@ -2405,7 +2754,11 @@ function App() {
           {(deletedToasts.length > 0 || createdToasts.length > 0) && (
             <div className="admin-undo-toast-stack" aria-live="polite">
               {createdToasts.map((toast) => (
-                <div key={toast.toastId} className={`admin-undo-toast admin-toast-success admin-toast-${toast.tone || 'subject'}`} role="status">
+                <div
+                  key={toast.toastId}
+                  className={`admin-undo-toast ${toast.tone === 'error' ? 'admin-toast-error' : `admin-toast-success admin-toast-${toast.tone || 'subject'}`}`}
+                  role="status"
+                >
                   <span>{toast.message}</span>
                 </div>
               ))}
@@ -2450,6 +2803,8 @@ function App() {
                   aria-modal="true"
                   aria-label="Backup exported"
                   onClick={(event) => event.stopPropagation()}
+                  ref={exportDialogRef}
+                  tabIndex={-1}
                 >
                   <h3>{exportNotice.title}</h3>
                   <p>
@@ -2474,14 +2829,38 @@ function App() {
                   aria-modal="true"
                   aria-label="Confirm restore backup"
                   onClick={(event) => event.stopPropagation()}
+                  ref={restoreDialogRef}
+                  tabIndex={-1}
                 >
                   <h3>Confirm restore</h3>
                   <p>
                     Replace current tiles with <strong>{restoreDraft.fileName}</strong>?
                   </p>
                   <p>
-                    Subjects: {restoreDraft.config.subjects.length} | Verbs: {restoreDraft.config.verbs.length} | Quick: {normalizeQuickWords(restoreDraft.config.quickWords).length}
+                    Backup includes:
                   </p>
+                  <div className="admin-restore-summary" role="list" aria-label="Backup tile counts">
+                    <div className="admin-restore-chip subject" role="listitem" aria-label={`Subjects: ${restoreDraft.config.subjects.length}`}>
+                      <span className="admin-restore-chip-count">{restoreDraft.config.subjects.length}</span>
+                      <span className="admin-restore-chip-label">Subjects</span>
+                    </div>
+                    <div className="admin-restore-chip verb" role="listitem" aria-label={`Verbs: ${restoreDraft.config.verbs.length}`}>
+                      <span className="admin-restore-chip-count">{restoreDraft.config.verbs.length}</span>
+                      <span className="admin-restore-chip-label">Verbs</span>
+                    </div>
+                    <div className="admin-restore-chip object" role="listitem" aria-label={`Objects: ${restoreObjectCount}`}>
+                      <span className="admin-restore-chip-count">{restoreObjectCount}</span>
+                      <span className="admin-restore-chip-label">Objects</span>
+                    </div>
+                    <div
+                      className="admin-restore-chip quick"
+                      role="listitem"
+                      aria-label={`Quick: ${normalizeQuickWords(restoreDraft.config.quickWords).length}`}
+                    >
+                      <span className="admin-restore-chip-count">{normalizeQuickWords(restoreDraft.config.quickWords).length}</span>
+                      <span className="admin-restore-chip-label">Quick</span>
+                    </div>
+                  </div>
                   <div className="admin-restore-actions">
                     <button type="button" className="admin-btn" onClick={onConfirmRestore}>
                       Confirm restore
@@ -2498,7 +2877,7 @@ function App() {
           {deleteDraft && (
             <>
               <div className="admin-delete-backdrop" onClick={onCancelDeleteTile} aria-hidden="true" />
-              <div className="admin-delete-modal" role="dialog" aria-modal="true" aria-label="Confirm delete tile">
+              <div className="admin-delete-modal" role="dialog" aria-modal="true" aria-label="Confirm delete tile" ref={deleteDialogRef} tabIndex={-1}>
                 <h3>Delete tile?</h3>
                 <p>
                   Delete &quot;{deleteDraft.tile.label}&quot; from {deleteDraft.scope} tiles?
@@ -2518,7 +2897,7 @@ function App() {
           {moveObjectDraft && (
             <>
               <div className="admin-move-backdrop" onClick={onCancelMoveObjectTile} aria-hidden="true" />
-              <div className="admin-move-modal" role="dialog" aria-modal="true" aria-label="Change object tile verb">
+              <div className="admin-move-modal" role="dialog" aria-modal="true" aria-label="Change object tile verb" ref={moveDialogRef} tabIndex={-1}>
                 <h3>Change verb category</h3>
                 <p>
                   Move &quot;{moveObjectDraft.tile.label}&quot; to:
