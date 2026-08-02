@@ -2119,6 +2119,7 @@ function App() {
     setBackupStatus('Restore canceled.')
   }
 
+  const isTileAdminTab = ['subject', 'verb', 'object', 'quick'].includes(adminTab)
   const adminTiles =
     adminTab === 'subject'
       ? subjects
@@ -2126,8 +2127,18 @@ function App() {
         ? verbs
         : adminTab === 'object'
           ? adminObjectTiles
-          : quickWords
-  const adminTabLabel = adminTab === 'subject' ? 'subject' : adminTab === 'verb' ? 'verb' : adminTab === 'object' ? 'object' : 'quick'
+          : adminTab === 'quick'
+            ? quickWords
+            : []
+  const adminTabLabel = adminTab === 'subject'
+    ? 'subject'
+    : adminTab === 'verb'
+      ? 'verb'
+      : adminTab === 'object'
+        ? 'object'
+        : adminTab === 'quick'
+          ? 'quick'
+          : ''
   const createTileTitle = adminTabLabel === 'object' ? 'Create an object tile' : `Create a ${adminTabLabel} tile`
   const searchTileTitle = `Search ${adminTabLabel} tiles`
   const selectedObjectVerb = verbs.find((item) => item.id === objectVerbId)
@@ -2770,22 +2781,6 @@ function App() {
                 </span>
               </div>
               <div className="admin-header-actions">
-                <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
-                  <span className="admin-action-icon" aria-hidden="true">⤓</span>
-                  Export backup
-                </button>
-                <label className="admin-btn ghost admin-file-btn">
-                  <span className="admin-action-icon" aria-hidden="true">⤒</span>
-                  Restore backup
-                  <input
-                    type="file"
-                    accept="application/json"
-                    onChange={(event) => {
-                      onRestoreBackup(event.target.files?.[0])
-                      event.target.value = ''
-                    }}
-                  />
-                </label>
                 <button type="button" className="admin-btn ghost" onClick={onLockAdmin}>
                   <span className="admin-action-icon" aria-hidden="true">🔒</span>
                   Lock admin
@@ -2801,32 +2796,6 @@ function App() {
                 {backupStatus}
               </p>
             )}
-
-            <label className="admin-voice-row">
-              <span>Voice</span>
-              <div className="admin-voice-controls">
-                <select
-                  value={voicePreference}
-                  onChange={(event) => {
-                    setVoicePreference(event.target.value)
-                    setLiveAnnouncement(event.target.value ? 'Voice updated.' : 'Default voice selected.')
-                  }}
-                >
-                  <option value="">System default</option>
-                  {isSavedVoiceUnavailable && (
-                    <option value={voicePreference}>Saved voice (not available on this device)</option>
-                  )}
-                  {uniqueAvailableVoices.map((voice) => (
-                    <option key={getVoicePreferenceId(voice)} value={getVoicePreferenceId(voice)}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="admin-btn ghost" onClick={onPreviewVoice}>
-                  Preview voice
-                </button>
-              </div>
-            </label>
 
             <div className="admin-tabs">
               <button
@@ -2869,7 +2838,78 @@ function App() {
                   {quickTileCount}
                 </span>
               </button>
+              <button
+                type="button"
+                className={`admin-tab ${adminTab === 'voice' ? 'active' : ''}`}
+                onClick={() => onChangeAdminTab('voice')}
+              >
+                <span>Voice settings</span>
+              </button>
+              <button
+                type="button"
+                className={`admin-tab ${adminTab === 'backup' ? 'active' : ''}`}
+                onClick={() => onChangeAdminTab('backup')}
+              >
+                <span>Export/Restore</span>
+              </button>
             </div>
+
+            {adminTab === 'voice' && (
+              <section className="admin-settings-card" aria-label="Voice settings">
+                <h3>Voice settings</h3>
+                <p>Choose a voice and preview how Arti announces tiles.</p>
+                <label className="admin-voice-row">
+                  <span>Voice type</span>
+                  <div className="admin-voice-controls">
+                    <select
+                      value={voicePreference}
+                      onChange={(event) => {
+                        setVoicePreference(event.target.value)
+                        setLiveAnnouncement(event.target.value ? 'Voice updated.' : 'Default voice selected.')
+                      }}
+                    >
+                      <option value="">System default</option>
+                      {isSavedVoiceUnavailable && (
+                        <option value={voicePreference}>Saved voice (not available on this device)</option>
+                      )}
+                      {uniqueAvailableVoices.map((voice) => (
+                        <option key={getVoicePreferenceId(voice)} value={getVoicePreferenceId(voice)}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="admin-btn ghost admin-voice-preview-btn" onClick={onPreviewVoice}>
+                      Preview voice
+                    </button>
+                  </div>
+                </label>
+              </section>
+            )}
+
+            {adminTab === 'backup' && (
+              <section className="admin-settings-card" aria-label="Export and restore">
+                <h3>Export and restore</h3>
+                <p>Download a backup of your tiles or restore from a previous backup file.</p>
+                <div className="admin-item-tools admin-backup-actions">
+                  <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
+                    <span className="admin-action-icon" aria-hidden="true">⤓</span>
+                    Export backup
+                  </button>
+                  <label className="admin-btn ghost admin-file-btn">
+                    <span className="admin-action-icon" aria-hidden="true">⤒</span>
+                    Restore backup
+                    <input
+                      type="file"
+                      accept="application/json"
+                      onChange={(event) => {
+                        onRestoreBackup(event.target.files?.[0])
+                        event.target.value = ''
+                      }}
+                    />
+                  </label>
+                </div>
+              </section>
+            )}
 
             {adminTab === 'object' && (
               <>
@@ -2900,236 +2940,266 @@ function App() {
               </div>
             )}
 
-            <>
-              <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
-                <h3>{createTileTitle}</h3>
-                <p>Give the tile a name, then add an image.</p>
-                <div className="admin-create">
-                  <div className="admin-create-name-field">
-                    <input
-                      type="text"
-                      value={newTileName}
-                      onChange={(event) => {
-                        setNewTileName(event.target.value.slice(0, TILE_LABEL_MAX_LENGTH))
-                        if (newTileNameError) {
-                          setNewTileNameError('')
-                        }
-                      }}
-                      placeholder="Tile name"
-                      maxLength={TILE_LABEL_MAX_LENGTH}
-                      aria-invalid={Boolean(newTileNameError)}
-                      aria-describedby={newTileNameError ? 'admin-new-tile-name-error' : undefined}
-                    />
-                    <input
-                      type="text"
-                      value={newTileSpoken}
-                      maxLength={TILE_SPOKEN_MAX_LENGTH}
-                      onChange={(event) => setNewTileSpoken(event.target.value.slice(0, TILE_SPOKEN_MAX_LENGTH))}
-                      placeholder="Speak as (optional)"
-                    />
-                    {newTileNameError && <p className="admin-inline-error" id="admin-new-tile-name-error" role="alert">{newTileNameError}</p>}
-                    {newTileImage && (
-                      <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
-                    )}
-                  </div>
-                  <label className="admin-btn admin-file-btn admin-upload-btn">
-                    {newTileImage ? 'Upload a new image' : 'Upload image'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
-                    />
-                  </label>
-                  <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
-                    {`Create ${adminTabLabel} tile`}
-                  </button>
-                </div>
-              </section>
-
-              <div className="admin-section-divider" aria-hidden="true" />
-            </>
-
-            <label className="admin-search-row">
-              <span>{searchTileTitle}</span>
-              <input
-                type="search"
-                value={adminSearchQuery}
-                onChange={(event) => setAdminSearchQuery(event.target.value)}
-                placeholder="Search by tile name"
-              />
-            </label>
-
-            {adminTab === 'object' && (
-              <h3 className="admin-list-title">
-                {selectedObjectVerb
-                  ? `Object tiles for "${selectedObjectVerb.label}"`
-                  : 'Object tiles'}
-              </h3>
-            )}
-
-            <div className="admin-list">
-              {visibleAdminTiles.map(({ item, sourceIndex }) => (
-                <article
-                  key={`${item.id}-${sourceIndex}`}
-                  className={`admin-item ${
-                    dragState.active && dragState.fromIndex === sourceIndex && dragState.scope === adminTab
-                      ? 'dragging'
-                      : ''
-                  } ${
-                    dragState.active && dragState.overIndex === sourceIndex && dragState.scope === adminTab
-                      ? 'drop-target'
-                      : ''
-                  }`}
-                  data-admin-item-index={sourceIndex}
-                >
-                  <div className={`admin-item-media ${adminTab === 'quick' ? 'quick-item-media' : ''}`}>
-                    <div
-                      className={`admin-item-preview ${
-                        adminTab === 'subject'
-                          ? 'subject-tile'
-                          : adminTab === 'verb'
-                            ? 'verb-tile'
-                            : 'ghost-tile'
-                      }`}
-                      aria-hidden="true"
-                    >
-                      <img
-                        src={item.image}
-                        alt=""
-                        className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+            {isTileAdminTab && (
+              <>
+                <section className={`admin-create-card ${adminTabLabel}`} aria-label={createTileTitle}>
+                  <h3>{createTileTitle}</h3>
+                  <p>Give the tile a name, then add an image.</p>
+                  <div className="admin-create">
+                    <div className="admin-create-name-field">
+                      <input
+                        type="text"
+                        value={newTileName}
+                        onChange={(event) => {
+                          setNewTileName(event.target.value.slice(0, TILE_LABEL_MAX_LENGTH))
+                          if (newTileNameError) {
+                            setNewTileNameError('')
+                          }
+                        }}
+                        placeholder="Tile name"
+                        maxLength={TILE_LABEL_MAX_LENGTH}
+                        aria-invalid={Boolean(newTileNameError)}
+                        aria-describedby={newTileNameError ? 'admin-new-tile-name-error' : undefined}
                       />
-                      <span>{item.label}</span>
+                      <input
+                        type="text"
+                        value={newTileSpoken}
+                        maxLength={TILE_SPOKEN_MAX_LENGTH}
+                        onChange={(event) => setNewTileSpoken(event.target.value.slice(0, TILE_SPOKEN_MAX_LENGTH))}
+                        placeholder="Speak as (optional)"
+                      />
+                      {newTileNameError && <p className="admin-inline-error" id="admin-new-tile-name-error" role="alert">{newTileNameError}</p>}
+                      {newTileImage && (
+                        <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      className="admin-media-btn admin-media-drag admin-drag-handle"
-                      onPointerDown={(event) => onStartDragTile(adminTab, sourceIndex, event)}
-                      aria-label={`Drag to reorder ${item.label}`}
-                    >
-                      ↕
-                    </button>
-                    <button
-                      type="button"
-                      className="admin-media-btn admin-media-delete"
-                      onClick={() => onRequestDeleteTile(adminTab, item, sourceIndex)}
-                      aria-label={`Delete ${item.label || 'quick slot'}`}
-                    >
-                      <svg
-                        className="admin-media-icon"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        focusable="false"
-                      >
-                        <path
-                          d="M9 3h6m-8 3h10m-1 0-.7 12.2A2 2 0 0 1 13.3 20h-2.6a2 2 0 0 1-2-1.8L8 6m3 4v6m2-6v6"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="admin-item-fields">
-                    <input
-                      type="text"
-                      value={item.label}
-                      maxLength={TILE_LABEL_MAX_LENGTH}
-                      onChange={(event) =>
-                        onEditTile(adminTab, item.id, 'label', event.target.value)
-                      }
-                      onBlur={(event) =>
-                        onAdminTileLabelBlur(
-                          adminTab,
-                          item.id,
-                          event.target.value,
-                          item.image,
-                          adminTab === 'object' ? objectVerbId : '',
-                        )
-                      }
-                    />
-                    <input
-                      type="text"
-                      value={item.spoken || ''}
-                      maxLength={TILE_SPOKEN_MAX_LENGTH}
-                      onChange={(event) =>
-                        onEditTile(adminTab, item.id, 'spoken', event.target.value)
-                      }
-                      placeholder="Speak as (optional)"
-                    />
-                    <button
-                      type="button"
-                      className="admin-btn ghost"
-                      onClick={() => onPreviewTileSpeech(item)}
-                    >
-                      Preview
-                    </button>
                     <label className="admin-btn admin-file-btn admin-upload-btn">
-                      {item.image && !isGeneratedBadgeImage(item.image) ? 'Upload a new image' : 'Upload image'}
+                      {newTileImage ? 'Upload a new image' : 'Upload image'}
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(event) =>
-                          onUploadTileImage(adminTab, item.id, event.target.files?.[0])
-                        }
+                        onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
                       />
                     </label>
-                    <button
-                      type="button"
-                      className="admin-btn ghost"
-                      onClick={() => onRequestRemoveTileImage(
-                        adminTab,
-                        item,
-                        adminTab === 'object' ? objectVerbId : '',
-                      )}
-                      disabled={!item.image || isGeneratedBadgeImage(item.image)}
-                    >
-                      Delete image
+                    <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
+                      {`Create ${adminTabLabel} tile`}
                     </button>
                   </div>
-                  <div className={`admin-item-actions ${adminTab === 'object' ? 'object-actions' : ''} ${adminTab === 'quick' ? 'quick-actions' : ''}`}>
-                    <button
-                      type="button"
-                      className="admin-btn ghost"
-                      onClick={() => onReorderTile(adminTab, sourceIndex, -1)}
-                    >
-                      Up
-                    </button>
-                    <button
-                      type="button"
-                      className="admin-btn ghost"
-                      onClick={() => onReorderTile(adminTab, sourceIndex, 1)}
-                    >
-                      Down
-                    </button>
-                    <button
-                      type="button"
-                      className="admin-btn ghost"
-                      onClick={() => onDuplicateTile(adminTab, item, sourceIndex)}
-                    >
-                      Copy
-                    </button>
-                    {adminTab === 'object' && (
-                      <button
-                        type="button"
-                        className="admin-btn ghost"
-                        onClick={() => onRequestMoveObjectTile(item, sourceIndex)}
-                      >
-                        Change verb
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
+                </section>
 
-            {visibleAdminTiles.length === 0 && (
-              <p className="admin-empty-state" role="status" aria-live="polite">
-                {normalizedAdminSearch
-                  ? `No ${adminTabLabel} tiles found for "${adminSearchQuery.trim()}". Create a new ${adminTabLabel} tile above.`
-                  : `No ${adminTabLabel} tiles found.`}
-              </p>
+                <div className="admin-section-divider" aria-hidden="true" />
+
+                <label className="admin-search-row">
+                  <span>{searchTileTitle}</span>
+                  <input
+                    type="search"
+                    value={adminSearchQuery}
+                    onChange={(event) => setAdminSearchQuery(event.target.value)}
+                    placeholder="Search by tile name"
+                  />
+                </label>
+
+                {adminTab === 'object' && (
+                  <h3 className="admin-list-title">
+                    {selectedObjectVerb
+                      ? `Object tiles for "${selectedObjectVerb.label}"`
+                      : 'Object tiles'}
+                  </h3>
+                )}
+
+                <div className="admin-list">
+                  {visibleAdminTiles.map(({ item, sourceIndex }) => (
+                    <article
+                      key={`${item.id}-${sourceIndex}`}
+                      className={`admin-item ${
+                        dragState.active && dragState.fromIndex === sourceIndex && dragState.scope === adminTab
+                          ? 'dragging'
+                          : ''
+                      } ${
+                        dragState.active && dragState.overIndex === sourceIndex && dragState.scope === adminTab
+                          ? 'drop-target'
+                          : ''
+                      }`}
+                      data-admin-item-index={sourceIndex}
+                    >
+                      <div className="admin-item-main">
+                        <div
+                          className={`admin-item-preview ${
+                            adminTab === 'subject'
+                              ? 'subject-tile'
+                              : adminTab === 'verb'
+                                ? 'verb-tile'
+                                : 'ghost-tile'
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <img
+                            src={item.image}
+                            alt=""
+                            className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                          />
+                          <span>{item.label || 'Tile'}</span>
+                        </div>
+                        <div className="admin-item-content">
+                          <div className="admin-item-fields">
+                            <label className="admin-field">
+                              <span>Tile text</span>
+                              <input
+                                type="text"
+                                value={item.label}
+                                maxLength={TILE_LABEL_MAX_LENGTH}
+                                onChange={(event) =>
+                                  onEditTile(adminTab, item.id, 'label', event.target.value)
+                                }
+                                onBlur={(event) =>
+                                  onAdminTileLabelBlur(
+                                    adminTab,
+                                    item.id,
+                                    event.target.value,
+                                    item.image,
+                                    adminTab === 'object' ? objectVerbId : '',
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="admin-field">
+                              <span>Speak as (optional)</span>
+                              <div className="admin-speak-input-row">
+                                <input
+                                  type="text"
+                                  value={item.spoken || ''}
+                                  maxLength={TILE_SPOKEN_MAX_LENGTH}
+                                  onChange={(event) =>
+                                    onEditTile(adminTab, item.id, 'spoken', event.target.value)
+                                  }
+                                  placeholder="Pronunciation override"
+                                />
+                                <button
+                                  type="button"
+                                  className="admin-btn ghost admin-play-icon-btn"
+                                  onClick={() => onPreviewTileSpeech(item)}
+                                  aria-label={`Play pronunciation for ${item.label || 'tile'}`}
+                                  title="Play"
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M8 6.5v11l9-5.5-9-5.5Z" fill="currentColor" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </label>
+                          </div>
+
+                          <div className="admin-item-tools">
+                            <label className="admin-btn admin-file-btn admin-upload-btn admin-action-btn">
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M5 5h14v14H5V5Zm7 3.5 2.5 2.5H13v4h-2v-4H9.5L12 8.5Zm-4 7.5h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              <span>{item.image && !isGeneratedBadgeImage(item.image) ? 'Upload a new image' : 'Upload image'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(event) =>
+                                  onUploadTileImage(adminTab, item.id, event.target.files?.[0])
+                                }
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="admin-btn ghost admin-action-btn"
+                              onClick={() => onRequestRemoveTileImage(
+                                adminTab,
+                                item,
+                                adminTab === 'object' ? objectVerbId : '',
+                              )}
+                              disabled={!item.image || isGeneratedBadgeImage(item.image)}
+                            >
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M9 3h6m-8 3h10m-1 0-.7 12.2A2 2 0 0 1 13.3 20h-2.6a2 2 0 0 1-2-1.8L8 6m3 4v6m2-6v6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              <span>Delete image</span>
+                            </button>
+                          </div>
+
+                          <div className="admin-item-quick-actions">
+                            <button
+                              type="button"
+                              className="admin-btn ghost admin-drag-handle admin-action-btn"
+                              onPointerDown={(event) => onStartDragTile(adminTab, sourceIndex, event)}
+                              aria-label={`Drag to reorder ${item.label}`}
+                            >
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M10 4h4v2h-4V4Zm0 7h4v2h-4v-2Zm0 7h4v2h-4v-2Z" fill="currentColor" />
+                              </svg>
+                              <span>Drag reorder</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn ghost admin-action-btn"
+                              onClick={() => onReorderTile(adminTab, sourceIndex, -1)}
+                            >
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M12 5 6.5 10.5l1.4 1.4 3.1-3.1V19h2V8.8l3.1 3.1 1.4-1.4L12 5Z" fill="currentColor" />
+                              </svg>
+                              <span>Move up</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn ghost admin-action-btn"
+                              onClick={() => onReorderTile(adminTab, sourceIndex, 1)}
+                            >
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M12 19 17.5 13.5l-1.4-1.4-3.1 3.1V5h-2v10.2l-3.1-3.1-1.4 1.4L12 19Z" fill="currentColor" />
+                              </svg>
+                              <span>Move down</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn ghost admin-action-btn"
+                              onClick={() => onDuplicateTile(adminTab, item, sourceIndex)}
+                            >
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M8 8h10v12H8V8Zm-2 8H4V4h10v2H6v10Z" fill="currentColor" />
+                              </svg>
+                              <span>Copy tile</span>
+                            </button>
+                            {adminTab === 'object' && (
+                              <button
+                                type="button"
+                                className="admin-btn ghost admin-action-btn"
+                                onClick={() => onRequestMoveObjectTile(item, sourceIndex)}
+                              >
+                                <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                  <path d="M7 7h10l-2.8-2.8L15.6 3 21 8.4 15.6 14l-1.4-1.4L17 9H7V7Zm10 10H7l2.8 2.8L8.4 21 3 15.6 8.4 10l1.4 1.4L7 15h10v2Z" fill="currentColor" />
+                                </svg>
+                                <span>Change verb</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="admin-btn ghost admin-item-danger admin-action-btn"
+                              onClick={() => onRequestDeleteTile(adminTab, item, sourceIndex)}
+                              aria-label={`Delete ${item.label || 'quick slot'}`}
+                            >
+                              <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M9 3h6m-8 3h10m-1 0-.7 12.2A2 2 0 0 1 13.3 20h-2.6a2 2 0 0 1-2-1.8L8 6m3 4v6m2-6v6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              <span>Delete tile</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                {visibleAdminTiles.length === 0 && (
+                  <p className="admin-empty-state" role="status" aria-live="polite">
+                    {normalizedAdminSearch
+                      ? `No ${adminTabLabel} tiles found for "${adminSearchQuery.trim()}". Create a new ${adminTabLabel} tile above.`
+                      : `No ${adminTabLabel} tiles found.`}
+                  </p>
+                )}
+              </>
             )}
           </section>
 

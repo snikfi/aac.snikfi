@@ -516,11 +516,31 @@
   color: #ffffff;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color 0.16s ease, transform 0.12s ease, box-shadow 0.16s ease;
 }
 
 .admin-btn.ghost {
   background: #f0f3f8;
   color: #121315;
+}
+
+.admin-btn:focus-visible {
+  outline: 0.125rem solid #2f7dff;
+  outline-offset: 0.125rem;
+}
+
+.admin-btn.ghost:focus-visible {
+  outline-color: #5f88db;
+}
+
+.admin-btn.ghost:hover:not(:disabled) {
+  background: #e2e8f3;
+  box-shadow: inset 0 0 0 0.0625rem #c8d4e8;
+}
+
+.admin-btn.ghost:active:not(:disabled) {
+  background: #d8e1ef;
+  transform: translateY(0.0625rem);
 }
 
 .admin-btn.danger {
@@ -635,6 +655,70 @@
   margin: 0.5rem 0 0;
   color: #1f3e23;
   font-weight: 700;
+}
+
+.admin-settings-card {
+  margin: 0.625rem 0 0.75rem;
+  border: 0.0625rem solid #d6e1f3;
+  border-radius: 0.875rem;
+  background: linear-gradient(180deg, #f7faff 0%, #eef4ff 100%);
+  padding: 0.75rem;
+}
+
+.admin-settings-card h3 {
+  margin: 0;
+  color: #1a2c57;
+  font-size: 0.9375rem;
+}
+
+.admin-settings-card p {
+  margin: 0.3125rem 0 0.625rem;
+  color: #334c84;
+  font-size: 0.8125rem;
+}
+
+.admin-backup-actions .admin-btn.ghost {
+  background: #ffffff;
+  color: #153572;
+  border: 0.0625rem solid #8faee6;
+  box-shadow: 0 0.0625rem 0.1875rem rgb(20 52 115 / 0.12);
+}
+
+.admin-backup-actions .admin-btn.ghost:hover:not(:disabled) {
+  background: #eaf1ff;
+  border-color: #5e84d1;
+  color: #102b63;
+}
+
+.admin-backup-actions .admin-btn.ghost:active:not(:disabled) {
+  background: #dfe9ff;
+  border-color: #4f76c6;
+}
+
+.admin-backup-actions .admin-btn.ghost:focus-visible {
+  outline-color: #2f66d1;
+}
+
+.admin-voice-preview-btn {
+  background: #ffffff;
+  color: #153572;
+  border: 0.0625rem solid #8faee6;
+  box-shadow: 0 0.0625rem 0.1875rem rgb(20 52 115 / 0.12);
+}
+
+.admin-voice-preview-btn:hover:not(:disabled) {
+  background: #eaf1ff;
+  border-color: #5e84d1;
+  color: #102b63;
+}
+
+.admin-voice-preview-btn:active:not(:disabled) {
+  background: #dfe9ff;
+  border-color: #4f76c6;
+}
+
+.admin-voice-preview-btn:focus-visible {
+  outline-color: #2f66d1;
 }
 
 .admin-restore-modal {
@@ -877,6 +961,7 @@
 
 .admin-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin: 0.625rem 0;
 }
@@ -951,7 +1036,7 @@
 .admin-voice-row {
   display: grid;
   gap: 0.375rem;
-  margin: 0.5rem 0 0.75rem;
+  margin: 0;
 }
 
 .admin-voice-row span {
@@ -1198,31 +1283,21 @@
 
 .admin-list {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-@media (max-width: 47.9375rem) {
-  .admin-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 30rem) {
-  .admin-list {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: 1fr;
+  gap: 0.625rem;
+  justify-items: stretch;
 }
 
 .admin-item {
-  border: 0.0625rem solid #e6e7ec;
-  border-radius: 0.75rem;
-  padding: 0.625rem;
+  border: 0.0625rem solid #d7deea;
+  border-radius: 0.875rem;
+  padding: 0.75rem;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.5rem;
+  gap: 0.625rem;
   align-items: stretch;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  width: 100%;
 }
 
 .admin-item.dragging {
@@ -1234,25 +1309,37 @@
   outline-offset: 0.125rem;
 }
 
-.admin-item-media {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-}
-
-.admin-item-media.quick-item-media {
-  background: transparent;
-}
-
-.admin-item-media.quick-item-media .ghost-tile {
-  background: #f3f4f6;
+.admin-item-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.625rem;
+  align-items: start;
 }
 
 .admin-item-preview {
-  width: min(100%, 6.5rem);
+  width: 10.75rem;
+  min-width: 10.75rem;
+  max-width: 10.75rem;
+  flex: 0 0 10.75rem;
   pointer-events: none;
   cursor: default;
+}
+
+.admin-item-preview.subject-tile,
+.admin-item-preview.verb-tile,
+.admin-item-preview.ghost-tile {
+  width: 10.75rem;
+  min-width: 10.75rem;
+  max-width: 10.75rem;
+}
+
+.admin-item-preview.subject-tile img,
+.admin-item-preview.verb-tile img,
+.admin-item-preview.ghost-tile img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  object-fit: cover;
 }
 
 .admin-item-preview.subject-tile,
@@ -1268,59 +1355,133 @@
   font-size: 1rem;
 }
 
-.admin-media-btn {
-  position: absolute;
-  top: 0.5rem;
-  width: 2.75rem;
-  height: 2.75rem;
-  border: 0;
-  border-radius: 62.4375rem;
+.admin-item-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.admin-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgb(15 17 24 / 0.72);
-  color: #ffffff;
-  font-size: 0.875rem;
-  cursor: pointer;
+  gap: 0.375rem;
 }
 
-.admin-media-icon {
-  width: 1rem;
-  height: 1rem;
+.admin-action-btn:hover:not(:disabled) {
+  transform: translateY(-0.0625rem);
 }
 
-.admin-media-drag {
-  left: 0.5rem;
+.admin-action-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
-.admin-media-delete {
-  right: 0.5rem;
-  background: rgb(150 22 22 / 0.84);
+.admin-action-icon {
+  font-size: 1.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.admin-item-content {
+  display: grid;
+  gap: 0.625rem;
+  min-width: 0;
 }
 
 .admin-item-fields {
   display: grid;
-  gap: 0.375rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem;
 }
 
 .admin-item-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.375rem;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.admin-field span {
+  color: #33405c;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.admin-speak-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-play-icon-btn {
+  width: 2.625rem;
+  min-width: 2.625rem;
+  height: 2.625rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-play-icon-btn svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.admin-item-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.admin-item-order-actions,
+.admin-item-more-actions {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .admin-item-actions.object-actions {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.admin-item-actions.quick-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .admin-drag-handle {
   cursor: grab;
-  user-select: none;
   touch-action: none;
+  user-select: none;
+  font-weight: 700;
+}
+
+.admin-item-extra-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.admin-btn.ghost.admin-item-danger {
+  background: #c42929;
+  color: #ffffff;
+}
+
+.admin-btn.ghost.admin-item-danger:hover:not(:disabled) {
+  background: #ad2020;
+  box-shadow: inset 0 0 0 0.0625rem #8f1717;
+}
+
+.admin-btn.ghost.admin-item-danger:active:not(:disabled) {
+  background: #991a1a;
+  transform: translateY(0.0625rem);
+}
+
+.admin-btn.ghost.admin-item-danger:focus-visible {
+  outline-color: #ce4d4d;
 }
 
 .admin-drag-handle:active {
@@ -1719,20 +1880,34 @@ button:focus-visible {
     min-width: 0;
   }
 
-  .admin-item {
-    grid-template-columns: 1fr;
-  }
-
   .admin-restore-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-item-preview {
-    width: min(100%, 8rem);
+  .admin-item-main {
+    grid-template-columns: 1fr;
   }
 
-  .admin-item-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .admin-item-main .admin-btn {
+    width: 100%;
+  }
+
+  .admin-list {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-item-preview {
+    width: 100%;
+  }
+
+  .admin-item-fields,
+  .admin-item-quick-actions,
+  .admin-item-tools,
+  .admin-item-extra-actions,
+  .admin-item-actions,
+  .admin-item-order-actions,
+  .admin-item-more-actions {
+    grid-template-columns: 1fr;
   }
 
   .top-strip {
