@@ -42,7 +42,25 @@ function isLocalDevAdminMode() {
     return false
   }
 
-  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const hostname = window.location.hostname
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    return true
+  }
+
+  if (/^10\./.test(hostname) || /^192\.168\./.test(hostname)) {
+    return true
+  }
+
+  const private172Match = hostname.match(/^172\.(\d{1,3})\./)
+  if (private172Match) {
+    const secondOctet = Number(private172Match[1])
+    if (secondOctet >= 16 && secondOctet <= 31) {
+      return true
+    }
+  }
+
+  return false
 }
 
 const DEFAULT_SUBJECTS = []
