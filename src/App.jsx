@@ -370,6 +370,20 @@ function exportCanvasDataUrl(canvas, type, quality) {
   return ''
 }
 
+function getPrintableLabel(tile) {
+  const label = typeof tile?.label === 'string' ? tile.label.trim() : ''
+  return label || 'Untitled tile'
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 async function optimizeTileUpload(file) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return readFileAsDataUrl(file)
@@ -526,6 +540,7 @@ function App() {
   const pinDialogRef = useRef(null)
   const adminDialogRef = useRef(null)
   const exportDialogRef = useRef(null)
+  const pdfSelectDialogRef = useRef(null)
   const restoreDialogRef = useRef(null)
   const deleteDialogRef = useRef(null)
   const removeImageDialogRef = useRef(null)
@@ -536,6 +551,7 @@ function App() {
   const [hasHydratedSync, setHasHydratedSync] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [exportNotice, setExportNotice] = useState(null)
+  const [pdfExportDraft, setPdfExportDraft] = useState(null)
   const [restoreDraft, setRestoreDraft] = useState(null)
   const [deleteDraft, setDeleteDraft] = useState(null)
   const [removeImageDraft, setRemoveImageDraft] = useState(null)
@@ -888,6 +904,8 @@ function App() {
 
   const activeDialog = isPinOpen
     ? 'pin'
+    : pdfExportDraft
+      ? 'pdf-select'
     : restoreDraft
       ? 'restore'
       : removeImageDraft
@@ -920,6 +938,10 @@ function App() {
         return restoreDialogRef.current
       }
 
+      if (activeDialog === 'pdf-select') {
+        return pdfSelectDialogRef.current
+      }
+
       if (activeDialog === 'delete') {
         return deleteDialogRef.current
       }
@@ -947,6 +969,11 @@ function App() {
 
       if (activeDialog === 'restore') {
         onCancelRestore()
+        return
+      }
+
+      if (activeDialog === 'pdf-select') {
+        onCancelPdfExport()
         return
       }
 
@@ -1031,7 +1058,7 @@ function App() {
       window.cancelAnimationFrame(frame)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [activeDialog])
+  }, [activeDialog, pdfExportDraft])
 
   useEffect(() => {
     const element = topStripRef.current
@@ -1387,9 +1414,14 @@ function App() {
     tileId,
     rawValue,
     currentImage,
+    currentSpoken,
     sourceVerbId = objectVerbId,
   ) => {
     if (String(rawValue || '').trim()) {
+      return
+    }
+
+    if (String(currentSpoken || '').trim()) {
       return
     }
 
@@ -1404,11 +1436,12 @@ function App() {
   const removeEmptyAdminTiles = () => {
     const isBlank = (item) => {
       const hasLabel = typeof item?.label === 'string' && item.label.trim()
+      const hasSpoken = typeof item?.spoken === 'string' && item.spoken.trim()
       const hasCustomImage = typeof item?.image === 'string'
         && item.image.trim()
         && !isGeneratedBadgeImage(item.image)
 
-      return !hasLabel && !hasCustomImage
+      return !hasLabel && !hasSpoken && !hasCustomImage
     }
 
     setSubjects((current) => current.filter((item) => !isBlank(item)))
@@ -2066,6 +2099,533 @@ function App() {
     setBackupStatus('')
   }
 
+  const buildPdfExportCatalog = () => {
+    const subjectItems = subjects
+      .filter((tile) => tile && typeof tile === 'object')
+      .map((tile, index) => ({
+        key: `subject:${tile.id}:${index}`,
+        tile,
+      }))
+
+    const verbItems = verbs
+      .filter((tile) => tile && typeof tile === 'object')
+      .map((tile, index) => ({
+        key: `verb:${tile.id}:${index}`,
+        tile,
+      }))
+
+    const objectItems = verbs.flatMap((verbItem) =>
+      (objectsByVerb[verbItem.id] || [])
+        .filter((tile) => tile && typeof tile === 'object')
+        .map((tile, index) => ({
+          key: `object:${verbItem.id}:${tile.id}:${index}`,
+          tile,
+          verbId: verbItem.id,
+          verbLabel: verbItem.label,
+        })),
+    )
+
+    const quickItems = quickWords
+      .filter((tile) => tile && typeof tile === 'object')
+      .map((tile, index) => ({
+        key: `quick:${tile.id}:${index}`,
+        tile,
+      }))
+
+    return {
+      subject: {
+        title: 'Subject tiles',
+        tone: 'subject',
+        items: subjectItems,
+      },
+      verb: {
+        title: 'Verb tiles',
+        tone: 'verb',
+        items: verbItems,
+      },
+      object: {
+        title: 'Object tiles',
+        tone: 'object',
+        items: objectItems,
+      },
+      quick: {
+        title: 'Quick tiles',
+        tone: 'quick',
+        items: quickItems,
+      },
+    }
+  }
+
+  const onOpenPdfExportDialog = () => {
+    const catalog = buildPdfExportCatalog()
+    const totalTileCount = Object.values(catalog).reduce((total, category) => total + category.items.length, 0)
+
+    if (!totalTileCount) {
+      setBackupStatus('No tiles available to export as PDF.')
+      return
+    }
+
+    const selectedKeysByCategory = Object.fromEntries(
+      Object.entries(catalog).map(([categoryKey, category]) => [
+        categoryKey,
+        category.items.map((item) => item.key),
+      ]),
+    )
+
+    setExportNotice(null)
+    setRestoreDraft(null)
+    setDeleteDraft(null)
+    setPdfExportDraft({ catalog, selectedKeysByCategory, expandedCategoryKeys: [] })
+    setBackupStatus('')
+  }
+
+  const onCancelPdfExport = () => {
+    setPdfExportDraft(null)
+  }
+
+  const onTogglePdfCategorySelectAll = (categoryKey, shouldSelectAll) => {
+    setPdfExportDraft((current) => {
+      if (!current?.catalog?.[categoryKey]) {
+        return current
+      }
+
+      const nextCategoryKeys = shouldSelectAll
+        ? current.catalog[categoryKey].items.map((item) => item.key)
+        : []
+
+      return {
+        ...current,
+        selectedKeysByCategory: {
+          ...current.selectedKeysByCategory,
+          [categoryKey]: nextCategoryKeys,
+        },
+      }
+    })
+  }
+
+  const onTogglePdfTile = (categoryKey, tileKey) => {
+    setPdfExportDraft((current) => {
+      if (!current?.catalog?.[categoryKey]) {
+        return current
+      }
+
+      const currentSelected = Array.isArray(current.selectedKeysByCategory?.[categoryKey])
+        ? current.selectedKeysByCategory[categoryKey]
+        : []
+
+      const isSelected = currentSelected.includes(tileKey)
+      const nextSelected = isSelected
+        ? currentSelected.filter((key) => key !== tileKey)
+        : [...currentSelected, tileKey]
+
+      return {
+        ...current,
+        selectedKeysByCategory: {
+          ...current.selectedKeysByCategory,
+          [categoryKey]: nextSelected,
+        },
+      }
+    })
+  }
+
+  const onTogglePdfCategoryExpanded = (categoryKey) => {
+    setPdfExportDraft((current) => {
+      if (!current?.catalog?.[categoryKey]) {
+        return current
+      }
+
+      const expanded = Array.isArray(current.expandedCategoryKeys)
+        ? current.expandedCategoryKeys
+        : []
+
+      const isExpanded = expanded.includes(categoryKey)
+      const nextExpanded = isExpanded
+        ? expanded.filter((key) => key !== categoryKey)
+        : [...expanded, categoryKey]
+
+      return {
+        ...current,
+        expandedCategoryKeys: nextExpanded,
+      }
+    })
+  }
+
+  const onSelectAllPdfTiles = () => {
+    setPdfExportDraft((current) => {
+      if (!current?.catalog) {
+        return current
+      }
+
+      return {
+        ...current,
+        selectedKeysByCategory: Object.fromEntries(
+          Object.entries(current.catalog).map(([categoryKey, category]) => [
+            categoryKey,
+            category.items.map((item) => item.key),
+          ]),
+        ),
+      }
+    })
+  }
+
+  const onClearAllPdfTiles = () => {
+    setPdfExportDraft((current) => {
+      if (!current?.catalog) {
+        return current
+      }
+
+      return {
+        ...current,
+        selectedKeysByCategory: Object.fromEntries(
+          Object.keys(current.catalog).map((categoryKey) => [categoryKey, []]),
+        ),
+      }
+    })
+  }
+
+  const onConfirmPdfExport = async () => {
+    if (!pdfExportDraft) {
+      return
+    }
+
+    const categoryOrder = ['subject', 'verb', 'object', 'quick']
+    const selectedSetByCategory = Object.fromEntries(
+      categoryOrder.map((categoryKey) => [
+        categoryKey,
+        new Set(pdfExportDraft.selectedKeysByCategory?.[categoryKey] || []),
+      ]),
+    )
+
+    const selectedSubjectTiles = pdfExportDraft.catalog.subject.items
+      .filter((item) => selectedSetByCategory.subject.has(item.key))
+      .map((item) => item.tile)
+
+    const selectedVerbTiles = pdfExportDraft.catalog.verb.items
+      .filter((item) => selectedSetByCategory.verb.has(item.key))
+      .map((item) => item.tile)
+
+    const selectedQuickTiles = pdfExportDraft.catalog.quick.items
+      .filter((item) => selectedSetByCategory.quick.has(item.key))
+      .map((item) => item.tile)
+
+    const selectedObjectItems = pdfExportDraft.catalog.object.items
+      .filter((item) => selectedSetByCategory.object.has(item.key))
+
+    const objectGroupMap = new Map()
+    selectedObjectItems.forEach((item) => {
+      if (!objectGroupMap.has(item.verbId)) {
+        objectGroupMap.set(item.verbId, {
+          title: `Object - ${item.verbLabel}`,
+          tone: 'object',
+          tiles: [],
+        })
+      }
+
+      objectGroupMap.get(item.verbId).tiles.push(item.tile)
+    })
+
+    const selectedTileGroups = [
+      { title: 'Subject tiles', tone: 'subject', tiles: selectedSubjectTiles },
+      { title: 'Verb tiles', tone: 'verb', tiles: selectedVerbTiles },
+      ...Array.from(objectGroupMap.values()),
+      { title: 'Quick tiles', tone: 'quick', tiles: selectedQuickTiles },
+    ].filter((group) => group.tiles.length > 0)
+
+    if (!selectedTileGroups.length) {
+      setBackupStatus('Select at least one tile to export.')
+      return
+    }
+
+    setPdfExportDraft(null)
+    await onExportTilesPdf(selectedTileGroups)
+  }
+
+  const onExportTilesPdf = async (preselectedTileGroups = null) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return
+    }
+
+    setBackupStatus('Preparing tile PDF...')
+
+    try {
+      const tileGroups = preselectedTileGroups || (() => {
+        const objectGroups = verbs
+          .map((verbItem) => ({
+            title: `Object - ${verbItem.label}`,
+            tone: 'object',
+            tiles: (objectsByVerb[verbItem.id] || []).filter((tile) => tile && typeof tile === 'object'),
+          }))
+          .filter((group) => group.tiles.length > 0)
+
+        const quickTilesForPdf = quickWords.filter((tile) => tile && typeof tile === 'object')
+
+        return [
+          { title: 'Subject tiles', tone: 'subject', tiles: subjects },
+          { title: 'Verb tiles', tone: 'verb', tiles: verbs },
+          ...objectGroups,
+          { title: 'Quick tiles', tone: 'quick', tiles: quickTilesForPdf },
+        ].filter((group) => Array.isArray(group.tiles) && group.tiles.length > 0)
+      })()
+
+      if (!tileGroups.length) {
+        setBackupStatus('No tiles available to export as PDF.')
+        return
+      }
+
+      const renderTileCard = (tile, tone = 'object') => {
+        const spoken = typeof tile?.spoken === 'string' ? tile.spoken.trim() : ''
+        const imageSrc = typeof tile?.image === 'string' ? tile.image : ''
+        const printableLabel = getPrintableLabel(tile)
+        const isGeneratedBadge = isGeneratedBadgeImage(imageSrc)
+        const tileTone = tone === 'subject' || tone === 'verb' || tone === 'quick' ? tone : 'object'
+        const imageClass = isGeneratedBadge ? 'generated-badge' : ''
+
+        return `
+          <article class="tile-card">
+            <div class="tile-visual tone-${tileTone}">
+              ${imageSrc
+                ? `<img class="${imageClass}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(printableLabel)}" />`
+                : '<div class="tile-placeholder">No image</div>'}
+              <span class="tile-label${tileTone === 'verb' ? ' is-verb' : ''}">${escapeHtml(printableLabel)}</span>
+            </div>
+            ${spoken ? `<p>Speak as: ${escapeHtml(spoken)}</p>` : ''}
+          </article>
+        `
+      }
+
+      const sectionsMarkup = tileGroups
+        .map((group) => `
+          <section class="tile-section">
+            <h2>${escapeHtml(group.title)}</h2>
+            <div class="tile-grid">
+              ${group.tiles.map((tile) => renderTileCard(tile, group.tone)).join('')}
+            </div>
+          </section>
+        `)
+        .join('')
+
+      const html = `
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Arti Tile Sheet</title>
+            <style>
+              @page {
+                size: A4;
+                margin: 10mm;
+              }
+
+              body {
+                margin: 0;
+                font-family: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
+                color: #102347;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+
+              * {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+
+              .tile-section {
+                break-inside: avoid;
+                page-break-inside: avoid;
+                margin: 0 0 7mm;
+              }
+
+              .tile-section h2 {
+                margin: 0 0 2.5mm;
+                font-size: 13pt;
+                color: #163978;
+              }
+
+              .tile-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 3.5mm;
+              }
+
+              .tile-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
+                min-height: 0;
+              }
+
+              .tile-visual {
+                position: relative;
+                width: 88%;
+                margin: 0 auto;
+                aspect-ratio: 9 / 10;
+                border: 0.0625rem solid #e6e6e6;
+                border-bottom-width: 0.125rem;
+                border-radius: 1.5rem;
+                box-shadow: 0 0.0625rem 0.375rem 0.125rem rgb(0 0 0 / 0.02);
+                padding: 0.4rem;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 0.375rem;
+                overflow: hidden;
+                font-family: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
+                font-size: 0.75rem;
+                color: #060606;
+                -webkit-text-fill-color: #060606;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+
+              .tile-visual.tone-subject {
+                background: #fdeaec;
+              }
+
+              .tile-visual.tone-verb {
+                background: #fafdd9;
+              }
+
+              .tile-visual.tone-object {
+                background: #c7f5e8;
+              }
+
+              .tile-visual.tone-quick {
+                background: #f3f4f6;
+              }
+
+              .tile-visual img,
+              .tile-placeholder {
+                width: 100%;
+                aspect-ratio: 1 / 1;
+                border-radius: 1rem;
+                display: block;
+                flex-shrink: 0;
+              }
+
+              .tile-visual img {
+                object-fit: contain;
+                background: transparent;
+              }
+
+              .tile-visual.tone-subject img {
+                object-fit: cover;
+              }
+
+              .tile-visual.tone-verb img.generated-badge,
+              .tile-visual.tone-object img.generated-badge,
+              .tile-visual.tone-quick img.generated-badge {
+                object-fit: cover;
+              }
+
+              .tile-placeholder {
+                display: grid;
+                place-items: center;
+                color: #5f7094;
+                font-size: 9pt;
+                background: #f4f7fc;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+
+              .tile-label {
+                margin: 0;
+                width: 100%;
+                font-size: 1.3rem;
+                line-height: 1.15;
+                font-weight: 700;
+                text-align: center;
+                color: #060606;
+                overflow-wrap: anywhere;
+                position: relative;
+                z-index: 1;
+              }
+
+              .tile-label.is-verb {
+                text-transform: lowercase;
+              }
+
+              .tile-card p {
+                margin: 0.25rem 0 0;
+                font-size: 8.5pt;
+                color: #355488;
+                line-height: 1.2;
+                text-align: center;
+              }
+            </style>
+          </head>
+          <body>
+            ${sectionsMarkup}
+          </body>
+        </html>
+      `
+
+      const printFrame = document.createElement('iframe')
+      printFrame.setAttribute('aria-hidden', 'true')
+      printFrame.style.position = 'fixed'
+      printFrame.style.right = '0'
+      printFrame.style.bottom = '0'
+      printFrame.style.width = '0'
+      printFrame.style.height = '0'
+      printFrame.style.border = '0'
+      printFrame.style.opacity = '0'
+      printFrame.style.pointerEvents = 'none'
+
+      const cleanupPrintFrame = () => {
+        if (printFrame.parentNode) {
+          printFrame.parentNode.removeChild(printFrame)
+        }
+      }
+
+      printFrame.onload = () => {
+        const frameWindow = printFrame.contentWindow
+        if (!frameWindow) {
+          cleanupPrintFrame()
+          setBackupStatus('Could not open print dialog for PDF export.')
+          return
+        }
+
+        const onAfterPrint = () => {
+          frameWindow.removeEventListener('afterprint', onAfterPrint)
+          cleanupPrintFrame()
+        }
+
+        frameWindow.addEventListener('afterprint', onAfterPrint)
+
+        window.setTimeout(() => {
+          try {
+            frameWindow.focus()
+            frameWindow.print()
+          } catch {
+            frameWindow.removeEventListener('afterprint', onAfterPrint)
+            cleanupPrintFrame()
+            setBackupStatus('Could not open print dialog for PDF export.')
+          }
+        }, 120)
+
+        // Ensure cleanup even if afterprint is not emitted on some mobile browsers.
+        window.setTimeout(() => {
+          frameWindow.removeEventListener('afterprint', onAfterPrint)
+          cleanupPrintFrame()
+        }, 120000)
+      }
+
+      printFrame.srcdoc = html
+      document.body.appendChild(printFrame)
+
+      setRestoreDraft(null)
+      setDeleteDraft(null)
+      setExportNotice({
+        title: 'Tile sheet ready',
+        message: 'Print dialog opened. Choose Save as PDF to download on your device.',
+      })
+      setBackupStatus('')
+    } catch {
+      setBackupStatus('Could not export tile PDF.')
+    }
+  }
+
   const onCloseExportNotice = () => {
     setExportNotice(null)
   }
@@ -2174,7 +2734,19 @@ function App() {
     && !uniqueAvailableVoices.some((voice) => getVoicePreferenceId(voice) === voicePreference),
   )
   const activeQuickWords = useMemo(
-    () => quickWords.filter((item) => typeof item?.label === 'string' && item.label.trim()),
+    () => quickWords.filter((item) => {
+      if (!item || typeof item !== 'object') {
+        return false
+      }
+
+      const hasLabel = typeof item.label === 'string' && item.label.trim()
+      const hasSpoken = typeof item.spoken === 'string' && item.spoken.trim()
+      const hasCustomImage = typeof item.image === 'string'
+        && item.image.trim()
+        && !isGeneratedBadgeImage(item.image)
+
+      return hasLabel || hasSpoken || hasCustomImage
+    }),
     [quickWords],
   )
   const normalizedAdminSearch = adminSearchQuery.trim().toLowerCase()
@@ -2887,26 +3459,43 @@ function App() {
             )}
 
             {adminTab === 'backup' && (
-              <section className="admin-settings-card" aria-label="Export and restore">
+              <section className="admin-settings-card admin-settings-card-flat" aria-label="Export and restore">
                 <h3>Export and restore</h3>
-                <p>Download a backup of your tiles or restore from a previous backup file.</p>
-                <div className="admin-item-tools admin-backup-actions">
-                  <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
-                    <span className="admin-action-icon" aria-hidden="true">⤓</span>
-                    Export backup
-                  </button>
-                  <label className="admin-btn ghost admin-file-btn">
-                    <span className="admin-action-icon" aria-hidden="true">⤒</span>
-                    Restore backup
-                    <input
-                      type="file"
-                      accept="application/json"
-                      onChange={(event) => {
-                        onRestoreBackup(event.target.files?.[0])
-                        event.target.value = ''
-                      }}
-                    />
-                  </label>
+                <p>Choose one export type below.</p>
+                <div className="admin-backup-sections">
+                  <section className="admin-backup-subsection" aria-label="Tile sheet PDF export">
+                    <h4>Printable tile sheet (PDF)</h4>
+                    <p>Creates an A4 two-column tile sheet for printing or saving as PDF.</p>
+                    <div className="admin-item-tools admin-backup-actions admin-pdf-actions">
+                      <button type="button" className="admin-btn ghost" onClick={onOpenPdfExportDialog}>
+                        <span className="admin-action-icon" aria-hidden="true">🖨</span>
+                        Export tiles PDF
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className="admin-backup-subsection" aria-label="Tile backup and restore">
+                    <h4>Backup and restore (.json)</h4>
+                    <p>Download a backup file or restore from a previous backup.</p>
+                    <div className="admin-item-tools admin-backup-actions admin-json-actions">
+                      <button type="button" className="admin-btn ghost" onClick={onExportBackup}>
+                        <span className="admin-action-icon" aria-hidden="true">⤓</span>
+                        Export backup
+                      </button>
+                      <label className="admin-btn ghost admin-file-btn">
+                        <span className="admin-action-icon" aria-hidden="true">⤒</span>
+                        Restore backup
+                        <input
+                          type="file"
+                          accept="application/json"
+                          onChange={(event) => {
+                            onRestoreBackup(event.target.files?.[0])
+                            event.target.value = ''
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </section>
                 </div>
               </section>
             )}
@@ -3057,6 +3646,7 @@ function App() {
                                     item.id,
                                     event.target.value,
                                     item.image,
+                                    item.spoken,
                                     adminTab === 'object' ? objectVerbId : '',
                                   )
                                 }
@@ -3240,6 +3830,128 @@ function App() {
                 </div>
               ))}
             </div>
+          )}
+
+          {pdfExportDraft && (
+            <>
+              <div className="admin-restore-backdrop" onClick={onCancelPdfExport} aria-hidden="true" />
+              <div
+                className="admin-pdf-select-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Choose tiles to include in PDF"
+                ref={pdfSelectDialogRef}
+                tabIndex={-1}
+              >
+                <h3>Choose Tiles For PDF Export</h3>
+                <p>Select individual tiles, or use select-all by category.</p>
+                {(() => {
+                  const categories = ['subject', 'verb', 'object', 'quick']
+                  const totalSelected = categories.reduce(
+                    (total, categoryKey) => total + (pdfExportDraft.selectedKeysByCategory?.[categoryKey]?.length || 0),
+                    0,
+                  )
+                  const totalAvailable = categories.reduce(
+                    (total, categoryKey) => total + (pdfExportDraft.catalog?.[categoryKey]?.items?.length || 0),
+                    0,
+                  )
+
+                  return (
+                    <div className="admin-pdf-select-summary" role="status" aria-live="polite">
+                      <div className="admin-pdf-select-total">
+                        <strong>{totalSelected}</strong>
+                        <span>of {totalAvailable} tiles selected</span>
+                      </div>
+                      <div className="admin-pdf-select-summary-actions">
+                        <button type="button" className="admin-btn ghost" onClick={onSelectAllPdfTiles}>
+                          Select all
+                        </button>
+                        <button type="button" className="admin-btn ghost" onClick={onClearAllPdfTiles}>
+                          Clear all
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
+                <div className="admin-pdf-select-groups">
+                  {['subject', 'verb', 'object', 'quick'].map((categoryKey) => {
+                    const category = pdfExportDraft.catalog[categoryKey]
+                    const items = category?.items || []
+                    const selectedKeys = pdfExportDraft.selectedKeysByCategory?.[categoryKey] || []
+                    const selectedCount = selectedKeys.length
+                    const isAllSelected = items.length > 0 && selectedCount === items.length
+                    const isExpanded = (pdfExportDraft.expandedCategoryKeys || []).includes(categoryKey)
+
+                    return (
+                      <section className={`admin-pdf-select-group ${categoryKey}`} key={categoryKey}>
+                        <header>
+                          <button
+                            type="button"
+                            className="admin-pdf-group-toggle"
+                            onClick={() => onTogglePdfCategoryExpanded(categoryKey)}
+                            aria-expanded={isExpanded}
+                            aria-controls={`pdf-category-${categoryKey}`}
+                          >
+                            <span className="admin-pdf-group-title">
+                              <span className="admin-pdf-group-dot" aria-hidden="true" />
+                              <h4>{category.title}</h4>
+                              <span className="admin-pdf-count-pill">{selectedCount}/{items.length}</span>
+                            </span>
+                            <span className={`admin-pdf-group-chevron ${isExpanded ? 'open' : ''}`} aria-hidden="true">▾</span>
+                          </button>
+                          <label className="admin-pdf-select-all">
+                            <input
+                              type="checkbox"
+                              checked={isAllSelected}
+                              onChange={(event) => onTogglePdfCategorySelectAll(categoryKey, event.target.checked)}
+                              disabled={!items.length}
+                            />
+                            Select all
+                          </label>
+                        </header>
+                        {isExpanded && (
+                          <div className="admin-pdf-select-list" id={`pdf-category-${categoryKey}`}>
+                          {items.map((item) => {
+                            const isChecked = selectedKeys.includes(item.key)
+                            const label = getPrintableLabel(item.tile)
+                            const objectSuffix = categoryKey === 'object' ? ` (${item.verbLabel})` : ''
+                            const imageSrc = typeof item.tile?.image === 'string' ? item.tile.image : ''
+
+                            return (
+                              <label key={item.key} className="admin-pdf-select-item">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => onTogglePdfTile(categoryKey, item.key)}
+                                />
+                                <span className="admin-pdf-item-preview" aria-hidden="true">
+                                  {imageSrc
+                                    ? <img src={imageSrc} alt="" />
+                                    : <span className="admin-pdf-item-fallback">+</span>}
+                                </span>
+                                <span className="admin-pdf-item-label">{label}{objectSuffix}</span>
+                              </label>
+                            )
+                          })}
+                          {items.length === 0 && (
+                            <p className="admin-pdf-select-empty">No tiles available.</p>
+                          )}
+                          </div>
+                        )}
+                      </section>
+                    )
+                  })}
+                </div>
+                <div className="admin-restore-actions">
+                  <button type="button" className="admin-btn" onClick={onConfirmPdfExport}>
+                    Export selected tiles
+                  </button>
+                  <button type="button" className="admin-btn ghost" onClick={onCancelPdfExport}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </>
           )}
 
           {exportNotice && !restoreDraft && !deleteDraft && (
