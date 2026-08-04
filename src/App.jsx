@@ -2550,6 +2550,10 @@ function App() {
                 object-fit: cover;
               }
 
+              .tile-visual.tone-object img {
+                object-fit: cover;
+              }
+
               .tile-visual.tone-verb img.generated-badge,
               .tile-visual.tone-object img.generated-badge,
               .tile-visual.tone-quick img.generated-badge {
@@ -3197,7 +3201,7 @@ function App() {
                   <button
                     key={item.__sourceKey || item.id}
                     type="button"
-                    className={`ghost-tile ${
+                    className={`object-tile ${
                       objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id)
                         ? 'selected'
                         : ''
@@ -3284,7 +3288,7 @@ function App() {
                   <button
                     key={item.__sourceKey || item.id}
                     type="button"
-                    className={`ghost-tile ${
+                    className={`object-tile ${
                       objectWord && (objectWord.__sourceKey || objectWord.id) === (item.__sourceKey || item.id)
                         ? 'selected'
                         : ''
