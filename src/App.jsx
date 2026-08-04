@@ -541,6 +541,8 @@ function App() {
   const adminDialogRef = useRef(null)
   const exportDialogRef = useRef(null)
   const pdfSelectDialogRef = useRef(null)
+  const createTileFileInputRef = useRef(null)
+  const restoreFileInputRef = useRef(null)
   const restoreDialogRef = useRef(null)
   const deleteDialogRef = useRef(null)
   const removeImageDialogRef = useRef(null)
@@ -2699,9 +2701,11 @@ function App() {
         : adminTab === 'quick'
           ? 'quick'
           : ''
-  const createTileTitle = adminTabLabel === 'object' ? 'Create an object tile' : `Create a ${adminTabLabel} tile`
-  const searchTileTitle = `Search ${adminTabLabel} tiles`
   const selectedObjectVerb = verbs.find((item) => item.id === objectVerbId)
+  const createTileTitle = adminTabLabel === 'object'
+    ? `Create an object tile connected to "${selectedObjectVerb?.label || 'a verb'}"`
+    : `Create a ${adminTabLabel} tile`
+  const searchTileTitle = `Search ${adminTabLabel} tiles`
   const subjectTileCount = subjects.length
   const verbTileCount = verbs.length
   const objectTileCount = Object.values(objectsByVerb).reduce(
@@ -3482,18 +3486,24 @@ function App() {
                         <span className="admin-action-icon" aria-hidden="true">⤓</span>
                         Export backup
                       </button>
-                      <label className="admin-btn ghost admin-file-btn">
+                      <button
+                        type="button"
+                        className="admin-btn ghost admin-file-btn"
+                        onClick={() => restoreFileInputRef.current?.click()}
+                      >
                         <span className="admin-action-icon" aria-hidden="true">⤒</span>
                         Restore backup
-                        <input
-                          type="file"
-                          accept="application/json"
-                          onChange={(event) => {
-                            onRestoreBackup(event.target.files?.[0])
-                            event.target.value = ''
-                          }}
-                        />
-                      </label>
+                      </button>
+                      <input
+                        ref={restoreFileInputRef}
+                        className="admin-file-input-hidden"
+                        type="file"
+                        accept="application/json"
+                        onChange={(event) => {
+                          onRestoreBackup(event.target.files?.[0])
+                          event.target.value = ''
+                        }}
+                      />
                     </div>
                   </section>
                 </div>
@@ -3507,19 +3517,36 @@ function App() {
                     Choose a verb first. New object tiles will be added to that verb.
                   </p>
                 </div>
-                <label className="admin-row">
-                  <span>Select verb category</span>
-                  <select
-                    value={objectVerbId}
-                    onChange={(event) => setObjectVerbId(event.target.value)}
-                  >
-                    {verbs.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <section className="admin-object-verb-picker" aria-label="Select verb category">
+                  <h3>Select verb category</h3>
+                  {verbs.length > 0 ? (
+                    <div className="admin-object-verb-grid" role="listbox" aria-label="Verb categories">
+                      {verbs.map((item) => {
+                        const isSelected = item.id === objectVerbId
+
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`admin-object-verb-tile ${isSelected ? 'selected' : ''}`}
+                            onClick={() => setObjectVerbId(item.id)}
+                            aria-selected={isSelected}
+                            role="option"
+                          >
+                            <img
+                              src={item.image}
+                              alt=""
+                              className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
+                            />
+                            <span>{item.label || 'Untitled verb'}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="admin-object-verb-empty">Create at least one verb tile first.</p>
+                  )}
+                </section>
               </>
             )}
 
@@ -3550,26 +3577,31 @@ function App() {
                         aria-invalid={Boolean(newTileNameError)}
                         aria-describedby={newTileNameError ? 'admin-new-tile-name-error' : undefined}
                       />
-                      <input
-                        type="text"
-                        value={newTileSpoken}
-                        maxLength={TILE_SPOKEN_MAX_LENGTH}
-                        onChange={(event) => setNewTileSpoken(event.target.value.slice(0, TILE_SPOKEN_MAX_LENGTH))}
-                        placeholder="Speak as (optional)"
-                      />
+                      <p className="admin-create-hint">
+                        You can add or edit Speak as after creating the tile in the list below.
+                      </p>
                       {newTileNameError && <p className="admin-inline-error" id="admin-new-tile-name-error" role="alert">{newTileNameError}</p>}
                       {newTileImage && (
                         <img className="admin-upload-preview" src={newTileImage} alt="Selected tile image preview" />
                       )}
                     </div>
-                    <label className="admin-btn admin-file-btn admin-upload-btn">
-                      {newTileImage ? 'Upload a new image' : 'Upload image'}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
-                      />
-                    </label>
+                    <button
+                      type="button"
+                      className="admin-btn admin-file-btn admin-upload-btn admin-action-btn"
+                      onClick={() => createTileFileInputRef.current?.click()}
+                    >
+                      <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M5 5h14v14H5V5Zm7 3.5 2.5 2.5H13v4h-2v-4H9.5L12 8.5Zm-4 7.5h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span>{newTileImage ? 'Upload a new image' : 'Upload image'}</span>
+                    </button>
+                    <input
+                      ref={createTileFileInputRef}
+                      className="admin-file-input-hidden"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => onUploadNewTileImage(event.target.files?.[0])}
+                    />
                     <button type="button" className="admin-btn admin-create-submit" onClick={onAddTile}>
                       {`Create ${adminTabLabel} tile`}
                     </button>
@@ -3680,19 +3712,25 @@ function App() {
                           </div>
 
                           <div className="admin-item-tools">
-                            <label className="admin-btn admin-file-btn admin-upload-btn admin-action-btn">
+                            <button
+                              type="button"
+                              className="admin-btn admin-file-btn admin-upload-btn admin-action-btn"
+                              onClick={() => document.getElementById(`admin-upload-${adminTab}-${item.id}-${sourceIndex}`)?.click()}
+                            >
                               <svg className="admin-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                 <path d="M5 5h14v14H5V5Zm7 3.5 2.5 2.5H13v4h-2v-4H9.5L12 8.5Zm-4 7.5h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
                               <span>{item.image && !isGeneratedBadgeImage(item.image) ? 'Upload a new image' : 'Upload image'}</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(event) =>
-                                  onUploadTileImage(adminTab, item.id, event.target.files?.[0])
-                                }
-                              />
-                            </label>
+                            </button>
+                            <input
+                              id={`admin-upload-${adminTab}-${item.id}-${sourceIndex}`}
+                              className="admin-file-input-hidden"
+                              type="file"
+                              accept="image/*"
+                              onChange={(event) =>
+                                onUploadTileImage(adminTab, item.id, event.target.files?.[0])
+                              }
+                            />
                             <button
                               type="button"
                               className="admin-btn ghost admin-action-btn"
