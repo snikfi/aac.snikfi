@@ -2399,10 +2399,26 @@ function App() {
         `
       }
 
-      const sectionsMarkup = tileGroups
+      const tileSections = tileGroups.flatMap((group) => {
+        const tiles = Array.isArray(group.tiles) ? group.tiles : []
+        const pages = []
+
+        for (let index = 0; index < tiles.length; index += 6) {
+          pages.push({
+            title: group.title,
+            tone: group.tone,
+            tiles: tiles.slice(index, index + 6),
+            pageNumber: Math.floor(index / 6) + 1,
+          })
+        }
+
+        return pages
+      })
+
+      const sectionsMarkup = tileSections
         .map((group) => `
           <section class="tile-section">
-            <h2>${escapeHtml(group.title)}</h2>
+            <h2>${escapeHtml(group.title)}${group.pageNumber > 1 ? ` (page ${group.pageNumber})` : ''}</h2>
             <div class="tile-grid">
               ${group.tiles.map((tile) => renderTileCard(tile, group.tone)).join('')}
             </div>
@@ -2437,45 +2453,58 @@ function App() {
               }
 
               .tile-section {
-                break-inside: avoid;
-                page-break-inside: avoid;
-                margin: 0 0 7mm;
+                height: 277mm;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                break-after: page;
+                page-break-after: always;
+                margin: 0;
+              }
+
+              .tile-section:last-child {
+                break-after: auto;
+                page-break-after: auto;
               }
 
               .tile-section h2 {
-                margin: 0 0 2.5mm;
-                font-size: 13pt;
+                margin: 0 0 2mm;
+                font-size: 11.5pt;
                 color: #163978;
               }
 
               .tile-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 3.5mm;
+                grid-template-rows: repeat(3, minmax(0, 1fr));
+                gap: 2.5mm;
+                flex: 1;
               }
 
               .tile-card {
                 break-inside: avoid;
                 page-break-inside: avoid;
                 min-height: 0;
+                height: 100%;
+                overflow: hidden;
               }
 
               .tile-visual {
                 position: relative;
-                width: 88%;
+                width: 78%;
                 margin: 0 auto;
                 aspect-ratio: 9 / 10;
                 border: 0.0625rem solid #e6e6e6;
                 border-bottom-width: 0.125rem;
                 border-radius: 1.5rem;
                 box-shadow: 0 0.0625rem 0.375rem 0.125rem rgb(0 0 0 / 0.02);
-                padding: 0.4rem;
+                padding: 0.325rem;
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: flex-start;
-                gap: 0.375rem;
+                gap: 0.25rem;
                 overflow: hidden;
                 font-family: 'Atkinson Hyperlegible Next', 'Segoe UI', sans-serif;
                 font-size: 0.75rem;
@@ -2538,7 +2567,7 @@ function App() {
               .tile-label {
                 margin: 0;
                 width: 100%;
-                font-size: 1.3rem;
+                font-size: 1.05rem;
                 line-height: 1.15;
                 font-weight: 700;
                 text-align: center;
@@ -2553,11 +2582,16 @@ function App() {
               }
 
               .tile-card p {
-                margin: 0.25rem 0 0;
-                font-size: 8.5pt;
+                margin: 0.125rem 0 0;
+                font-size: 7.5pt;
                 color: #355488;
-                line-height: 1.2;
+                line-height: 1.1;
                 text-align: center;
+                overflow: hidden;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                max-height: 2.2em;
               }
             </style>
           </head>
