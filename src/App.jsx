@@ -375,6 +375,10 @@ function getPrintableLabel(tile) {
   return label || 'Untitled tile'
 }
 
+function getPrintTileLabel(tile) {
+  return typeof tile?.label === 'string' ? tile.label.trim() : ''
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -2377,7 +2381,7 @@ function App() {
       const renderTileCard = (tile, tone = 'object') => {
         const spoken = typeof tile?.spoken === 'string' ? tile.spoken.trim() : ''
         const imageSrc = typeof tile?.image === 'string' ? tile.image : ''
-        const printableLabel = getPrintableLabel(tile)
+        const printableLabel = getPrintTileLabel(tile)
         const isGeneratedBadge = isGeneratedBadgeImage(imageSrc)
         const tileTone = tone === 'subject' || tone === 'verb' || tone === 'quick' ? tone : 'object'
         const imageClass = isGeneratedBadge ? 'generated-badge' : ''
@@ -2386,7 +2390,7 @@ function App() {
           <article class="tile-card">
             <div class="tile-visual tone-${tileTone}">
               ${imageSrc
-                ? `<img class="${imageClass}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(printableLabel)}" />`
+                ? `<img class="${imageClass}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(printableLabel || 'Tile image')}" />`
                 : '<div class="tile-placeholder">No image</div>'}
               <span class="tile-label${tileTone === 'verb' ? ' is-verb' : ''}">${escapeHtml(printableLabel)}</span>
             </div>
@@ -3659,7 +3663,7 @@ function App() {
                             alt=""
                             className={isGeneratedBadgeImage(item.image) ? 'generated-badge' : ''}
                           />
-                          <span>{item.label || 'Tile'}</span>
+                          <span>{item.label}</span>
                         </div>
                         <div className="admin-item-content">
                           <div className="admin-item-fields">
