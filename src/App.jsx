@@ -136,10 +136,10 @@ const DEFAULT_QUICK_WORDS = [
   },
 ]
 
-function makeBadgeImage(label, backgroundColor, foregroundColor = '#060606') {
+function makeBadgeImage(label, backgroundColor, foregroundColor = '#060606', cornerRadius = 16) {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
-      <rect width="128" height="128" rx="24" fill="${backgroundColor}"/>
+      <rect width="128" height="128" rx="${cornerRadius}" ry="${cornerRadius}" fill="${backgroundColor}"/>
       <text x="64" y="68" text-anchor="middle" font-family="Lato, Arial, sans-serif" font-size="18" font-weight="700" fill="${foregroundColor}">${label}</text>
     </svg>
   `
@@ -169,6 +169,10 @@ function getTileDisplayImage(tile, scope, isSelected) {
   }
 
   return makeBadgeImage(tile.label, getTileBadgeSelectedBackground(scope))
+}
+
+function makePdfBadgeImage(label, backgroundColor, foregroundColor = '#060606') {
+  return makeBadgeImage(label, backgroundColor, foregroundColor, 12)
 }
 
 const DEFAULT_OBJECTS_BY_VERB = {}
@@ -558,6 +562,7 @@ function App() {
   const [backupStatus, setBackupStatus] = useState('')
   const [exportNotice, setExportNotice] = useState(null)
   const [pdfExportDraft, setPdfExportDraft] = useState(null)
+  const [pdfExportError, setPdfExportError] = useState('')
   const [restoreDraft, setRestoreDraft] = useState(null)
   const [deleteDraft, setDeleteDraft] = useState(null)
   const [removeImageDraft, setRemoveImageDraft] = useState(null)
@@ -2182,14 +2187,17 @@ function App() {
     setRestoreDraft(null)
     setDeleteDraft(null)
     setPdfExportDraft({ catalog, selectedKeysByCategory, expandedCategoryKeys: [] })
+    setPdfExportError('')
     setBackupStatus('')
   }
 
   const onCancelPdfExport = () => {
     setPdfExportDraft(null)
+    setPdfExportError('')
   }
 
   const onTogglePdfCategorySelectAll = (categoryKey, shouldSelectAll) => {
+    setPdfExportError('')
     setPdfExportDraft((current) => {
       if (!current?.catalog?.[categoryKey]) {
         return current
@@ -2210,6 +2218,7 @@ function App() {
   }
 
   const onTogglePdfTile = (categoryKey, tileKey) => {
+    setPdfExportError('')
     setPdfExportDraft((current) => {
       if (!current?.catalog?.[categoryKey]) {
         return current
@@ -2257,6 +2266,7 @@ function App() {
   }
 
   const onSelectAllPdfTiles = () => {
+    setPdfExportError('')
     setPdfExportDraft((current) => {
       if (!current?.catalog) {
         return current
@@ -2275,6 +2285,7 @@ function App() {
   }
 
   const onClearAllPdfTiles = () => {
+    setPdfExportError('')
     setPdfExportDraft((current) => {
       if (!current?.catalog) {
         return current
@@ -2317,31 +2328,19 @@ function App() {
     const selectedObjectItems = pdfExportDraft.catalog.object.items
       .filter((item) => selectedSetByCategory.object.has(item.key))
 
-    const objectGroupMap = new Map()
-    selectedObjectItems.forEach((item) => {
-      if (!objectGroupMap.has(item.verbId)) {
-        objectGroupMap.set(item.verbId, {
-          title: `Object - ${item.verbLabel}`,
-          tone: 'object',
-          tiles: [],
-        })
-      }
-
-      objectGroupMap.get(item.verbId).tiles.push(item.tile)
-    })
-
     const selectedTileGroups = [
       { title: 'Subject tiles', tone: 'subject', tiles: selectedSubjectTiles },
       { title: 'Verb tiles', tone: 'verb', tiles: selectedVerbTiles },
-      ...Array.from(objectGroupMap.values()),
+      { title: 'Object tiles', tone: 'object', tiles: selectedObjectItems.map((item) => item.tile) },
       { title: 'Quick tiles', tone: 'quick', tiles: selectedQuickTiles },
     ].filter((group) => group.tiles.length > 0)
 
     if (!selectedTileGroups.length) {
-      setBackupStatus('Select at least one tile to export.')
+      setPdfExportError('Select at least one tile to export.')
       return
     }
 
+    setPdfExportError('')
     setPdfExportDraft(null)
     await onExportTilesPdf(selectedTileGroups)
   }
@@ -2355,20 +2354,18 @@ function App() {
 
     try {
       const tileGroups = preselectedTileGroups || (() => {
-        const objectGroups = verbs
-          .map((verbItem) => ({
-            title: `Object - ${verbItem.label}`,
-            tone: 'object',
-            tiles: (objectsByVerb[verbItem.id] || []).filter((tile) => tile && typeof tile === 'object'),
-          }))
-          .filter((group) => group.tiles.length > 0)
+        const objectTilesForPdf = verbs.flatMap((verbItem) =>
+          (objectsByVerb[verbItem.id] || [])
+            .filter((tile) => tile && typeof tile === 'object')
+            .map((tile) => tile),
+        )
 
         const quickTilesForPdf = quickWords.filter((tile) => tile && typeof tile === 'object')
 
         return [
           { title: 'Subject tiles', tone: 'subject', tiles: subjects },
           { title: 'Verb tiles', tone: 'verb', tiles: verbs },
-          ...objectGroups,
+          { title: 'Object tiles', tone: 'object', tiles: objectTilesForPdf },
           { title: 'Quick tiles', tone: 'quick', tiles: quickTilesForPdf },
         ].filter((group) => Array.isArray(group.tiles) && group.tiles.length > 0)
       })()
@@ -2385,12 +2382,18 @@ function App() {
         const isGeneratedBadge = isGeneratedBadgeImage(imageSrc)
         const tileTone = tone === 'subject' || tone === 'verb' || tone === 'quick' ? tone : 'object'
         const imageClass = isGeneratedBadge ? 'generated-badge' : ''
+        const printImageSrc = isGeneratedBadge && tileTone !== 'quick' && imageSrc
+          ? makePdfBadgeImage(
+            printableLabel || '+',
+            getTileBadgeBackground(tileTone),
+          )
+          : imageSrc
 
         return `
           <article class="tile-card">
             <div class="tile-visual tone-${tileTone}">
-              ${imageSrc
-                ? `<img class="${imageClass}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(printableLabel || 'Tile image')}" />`
+              ${printImageSrc
+                ? `<img class="${imageClass}" src="${escapeHtml(printImageSrc)}" alt="${escapeHtml(printableLabel || 'Tile image')}" />`
                 : '<div class="tile-placeholder">No image</div>'}
               <span class="tile-label${tileTone === 'verb' ? ' is-verb' : ''}">${escapeHtml(printableLabel)}</span>
             </div>
@@ -2498,7 +2501,7 @@ function App() {
                 border-bottom-width: 0.125rem;
                 border-radius: 1.5rem;
                 box-shadow: 0 0.0625rem 0.375rem 0.125rem rgb(0 0 0 / 0.02);
-                padding: 0.325rem;
+                padding: 0.75rem;
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
@@ -2575,6 +2578,11 @@ function App() {
                 overflow-wrap: anywhere;
                 position: relative;
                 z-index: 1;
+                flex: 1 1 auto;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding-top: 0.2rem;
               }
 
               .tile-label.is-verb {
@@ -3412,6 +3420,7 @@ function App() {
             )}
 
             <div className="admin-tabs">
+              <div className="admin-tabs-primary">
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'subject' ? 'active' : ''}`}
@@ -3452,6 +3461,8 @@ function App() {
                   {quickTileCount}
                 </span>
               </button>
+              </div>
+              <div className="admin-tabs-secondary">
               <button
                 type="button"
                 className={`admin-tab ${adminTab === 'voice' ? 'active' : ''}`}
@@ -3466,6 +3477,7 @@ function App() {
               >
                 <span>Export/Restore</span>
               </button>
+              </div>
             </div>
 
             {adminTab === 'voice' && (
@@ -3507,7 +3519,7 @@ function App() {
                 <div className="admin-backup-sections">
                   <section className="admin-backup-subsection" aria-label="Tile sheet PDF export">
                     <h4>Printable tile sheet (PDF)</h4>
-                    <p>Creates an A4 two-column tile sheet for printing or saving as PDF.</p>
+                    <p>Creates an A4 two-column PECS (Picture Exchange Communication System) tile sheet for printing or saving as PDF.</p>
                     <div className="admin-item-tools admin-backup-actions admin-pdf-actions">
                       <button type="button" className="admin-btn ghost" onClick={onOpenPdfExportDialog}>
                         <span className="admin-action-icon" aria-hidden="true">🖨</span>
@@ -3688,7 +3700,9 @@ function App() {
                               ? 'subject-tile'
                               : adminTab === 'verb'
                                 ? 'verb-tile'
-                                : 'ghost-tile'
+                                : adminTab === 'quick'
+                                  ? 'ghost-tile quick-tile'
+                                  : 'ghost-tile'
                           }`}
                           aria-hidden="true"
                         >
@@ -3949,6 +3963,11 @@ function App() {
                     </div>
                   )
                 })()}
+                {pdfExportError && (
+                  <p className="admin-inline-error admin-pdf-select-error" role="alert">
+                    {pdfExportError}
+                  </p>
+                )}
                 <div className="admin-pdf-select-groups">
                   {['subject', 'verb', 'object', 'quick'].map((categoryKey) => {
                     const category = pdfExportDraft.catalog[categoryKey]
