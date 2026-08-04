@@ -2397,7 +2397,6 @@ function App() {
                 : '<div class="tile-placeholder">No image</div>'}
               <span class="tile-label${tileTone === 'verb' ? ' is-verb' : ''}">${escapeHtml(printableLabel)}</span>
             </div>
-            ${spoken ? `<p>Speak as: ${escapeHtml(spoken)}</p>` : ''}
           </article>
         `
       }
