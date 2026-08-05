@@ -1,14 +1,42 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enterpriseDirectory } from './mockDirectory'
+import {
+  archiveEnterpriseClass,
+  archiveEnterprisePupil,
+  createEnterpriseClass,
+  createEnterprisePupil,
+  lookupEnterpriseProfile,
+  updateEnterpriseClass,
+  updateEnterprisePupil,
+} from '../lib/enterpriseDirectorySync'
 import './EnterpriseApp.css'
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase()
 }
 
-function TeacherPortal({ teacher, onSignOut }) {
+function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
   const [activeClassId, setActiveClassId] = useState(teacher.classes[0]?.id || '')
   const [selectedPupilId, setSelectedPupilId] = useState('')
+  const [newClassName, setNewClassName] = useState('')
+  const [newClassGrade, setNewClassGrade] = useState('')
+  const [newPupilName, setNewPupilName] = useState('')
+  const [newPupilGoal, setNewPupilGoal] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [busyAction, setBusyAction] = useState('')
+
+  useEffect(() => {
+    if (!teacher.classes.length) {
+      setActiveClassId('')
+      setSelectedPupilId('')
+      return
+    }
+
+    const stillExists = teacher.classes.some((room) => room.id === activeClassId)
+    if (!stillExists) {
+      setActiveClassId(teacher.classes[0].id)
+      setSelectedPupilId('')
+    }
+  }, [activeClassId, teacher.classes])
 
   const activeClass = useMemo(
     () => teacher.classes.find((room) => room.id === activeClassId) || null,
@@ -22,6 +50,139 @@ function TeacherPortal({ teacher, onSignOut }) {
 
     return activeClass.pupils.find((pupil) => pupil.id === selectedPupilId) || null
   }, [activeClass, selectedPupilId])
+
+  const runTeacherUpdate = async (actionLabel, operation) => {
+    setErrorMessage('')
+    setBusyAction(actionLabel)
+
+    try {
+      const payload = await operation()
+      if (payload?.profile) {
+        onTeacherProfileUpdate(payload.profile)
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Action failed. Try again.')
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  const onCreateClass = async (event) => {
+    event.preventDefault()
+
+    const name = newClassName.trim()
+    const grade = newClassGrade.trim()
+
+    if (!name || !grade) {
+      setErrorMessage('Class name and grade are required.')
+      return
+    }
+
+    await runTeacherUpdate('create-class', () => createEnterpriseClass({
+      teacherId: teacher.id,
+      name,
+      grade,
+    }))
+
+    setNewClassName('')
+    setNewClassGrade('')
+  }
+
+  const onRenameClass = async (classRoom) => {
+    const nextName = window.prompt('Class name', classRoom.name)
+    if (nextName === null) {
+      return
+    }
+
+    const nextGrade = window.prompt('Grade', classRoom.grade)
+    if (nextGrade === null) {
+      return
+    }
+
+    const name = nextName.trim()
+    const grade = nextGrade.trim()
+
+    if (!name || !grade) {
+      setErrorMessage('Class name and grade are required.')
+      return
+    }
+
+    await runTeacherUpdate('rename-class', () => updateEnterpriseClass(classRoom.id, {
+      name,
+      grade,
+    }))
+  }
+
+  const onArchiveClass = async (classRoom) => {
+    const confirmed = window.confirm(`Archive class ${classRoom.name}? Pupils in this class will also be archived.`)
+    if (!confirmed) {
+      return
+    }
+
+    await runTeacherUpdate('archive-class', () => archiveEnterpriseClass(classRoom.id))
+  }
+
+  const onCreatePupil = async (event) => {
+    event.preventDefault()
+
+    if (!activeClass) {
+      setErrorMessage('Select a class before adding a pupil.')
+      return
+    }
+
+    const name = newPupilName.trim()
+    const communicationGoal = newPupilGoal.trim()
+
+    if (!name || !communicationGoal) {
+      setErrorMessage('Pupil name and communication goal are required.')
+      return
+    }
+
+    await runTeacherUpdate('create-pupil', () => createEnterprisePupil({
+      classId: activeClass.id,
+      name,
+      communicationGoal,
+    }))
+
+    setNewPupilName('')
+    setNewPupilGoal('')
+  }
+
+  const onRenamePupil = async (pupil) => {
+    const nextName = window.prompt('Pupil name', pupil.name)
+    if (nextName === null) {
+      return
+    }
+
+    const nextGoal = window.prompt('Communication goal', pupil.communicationGoal)
+    if (nextGoal === null) {
+      return
+    }
+
+    const name = nextName.trim()
+    const communicationGoal = nextGoal.trim()
+
+    if (!name || !communicationGoal) {
+      setErrorMessage('Pupil name and communication goal are required.')
+      return
+    }
+
+    await runTeacherUpdate('rename-pupil', () => updateEnterprisePupil(pupil.id, {
+      name,
+      communicationGoal,
+    }))
+  }
+
+  const onArchivePupil = async (pupil) => {
+    const confirmed = window.confirm(`Archive pupil ${pupil.name}?`)
+    if (!confirmed) {
+      return
+    }
+
+    await runTeacherUpdate('archive-pupil', () => archiveEnterprisePupil(pupil.id))
+  }
+
+  const isBusy = Boolean(busyAction)
 
   return (
     <>
@@ -38,21 +199,43 @@ function TeacherPortal({ teacher, onSignOut }) {
 
       <section className="enterprise-card">
         <h2>Classes</h2>
+        <form className="enterprise-inline-form" onSubmit={onCreateClass}>
+          <input
+            type="text"
+            placeholder="New class name"
+            value={newClassName}
+            onChange={(event) => setNewClassName(event.target.value)}
+            disabled={isBusy}
+          />
+          <input
+            type="text"
+            placeholder="Grade"
+            value={newClassGrade}
+            onChange={(event) => setNewClassGrade(event.target.value)}
+            disabled={isBusy}
+          />
+          <button type="submit" className="enterprise-primary" disabled={isBusy}>Add class</button>
+        </form>
         <div className="enterprise-grid">
           {teacher.classes.map((room) => (
             <article key={room.id} className="enterprise-item">
               <h3>{room.name}</h3>
               <p>{room.grade} • {room.pupils.length} pupils</p>
-              <button
-                type="button"
-                className="enterprise-ghost"
-                onClick={() => {
-                  setActiveClassId(room.id)
-                  setSelectedPupilId('')
-                }}
-              >
-                {activeClassId === room.id ? 'Viewing class' : 'View pupils'}
-              </button>
+              <div className="enterprise-actions-row">
+                <button
+                  type="button"
+                  className="enterprise-ghost"
+                  disabled={isBusy}
+                  onClick={() => {
+                    setActiveClassId(room.id)
+                    setSelectedPupilId('')
+                  }}
+                >
+                  {activeClassId === room.id ? 'Viewing class' : 'View pupils'}
+                </button>
+                <button type="button" className="enterprise-ghost" disabled={isBusy} onClick={() => onRenameClass(room)}>Rename</button>
+                <button type="button" className="enterprise-ghost danger" disabled={isBusy} onClick={() => onArchiveClass(room)}>Archive</button>
+              </div>
             </article>
           ))}
         </div>
@@ -62,23 +245,48 @@ function TeacherPortal({ teacher, onSignOut }) {
         <h2>Pupils {activeClass ? `• ${activeClass.name}` : ''}</h2>
         {!activeClass && <p className="enterprise-note">Choose a class above to continue.</p>}
         {activeClass && (
+          <form className="enterprise-inline-form" onSubmit={onCreatePupil}>
+            <input
+              type="text"
+              placeholder="New pupil name"
+              value={newPupilName}
+              onChange={(event) => setNewPupilName(event.target.value)}
+              disabled={isBusy}
+            />
+            <input
+              type="text"
+              placeholder="Communication goal"
+              value={newPupilGoal}
+              onChange={(event) => setNewPupilGoal(event.target.value)}
+              disabled={isBusy}
+            />
+            <button type="submit" className="enterprise-primary" disabled={isBusy}>Add pupil</button>
+          </form>
+        )}
+        {activeClass && (
           <div className="enterprise-grid">
             {activeClass.pupils.map((pupil) => (
               <article key={pupil.id} className="enterprise-item">
                 <h3>{pupil.name}</h3>
                 <span className="enterprise-badge">Goal: {pupil.communicationGoal}</span>
                 <p>Parent contacts: {pupil.parentEmails.join(', ')}</p>
-                <button
-                  type="button"
-                  className="enterprise-ghost"
-                  onClick={() => setSelectedPupilId(pupil.id)}
-                >
-                  {selectedPupilId === pupil.id ? 'Profile selected' : 'Open profile'}
-                </button>
+                <div className="enterprise-actions-row">
+                  <button
+                    type="button"
+                    className="enterprise-ghost"
+                    disabled={isBusy}
+                    onClick={() => setSelectedPupilId(pupil.id)}
+                  >
+                    {selectedPupilId === pupil.id ? 'Profile selected' : 'Open profile'}
+                  </button>
+                  <button type="button" className="enterprise-ghost" disabled={isBusy} onClick={() => onRenamePupil(pupil)}>Rename</button>
+                  <button type="button" className="enterprise-ghost danger" disabled={isBusy} onClick={() => onArchivePupil(pupil)}>Archive</button>
+                </div>
               </article>
             ))}
           </div>
         )}
+        {errorMessage && <p className="enterprise-error" role="alert">{errorMessage}</p>}
       </section>
 
       {selectedPupil && (
@@ -151,6 +359,8 @@ export default function EnterpriseApp() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [session, setSession] = useState(null)
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [directorySource, setDirectorySource] = useState('')
 
   useEffect(() => {
     document.body.classList.add('enterprise-mode')
@@ -159,9 +369,10 @@ export default function EnterpriseApp() {
     }
   }, [])
 
-  const onSubmit = (event) => {
+  const onSubmit = async (event) => {
     event.preventDefault()
     setError('')
+    setDirectorySource('')
 
     const normalizedEmail = normalizeEmail(email)
 
@@ -170,24 +381,34 @@ export default function EnterpriseApp() {
       return
     }
 
-    if (role === 'teacher') {
-      const teacher = enterpriseDirectory.teachers.find((item) => normalizeEmail(item.email) === normalizedEmail)
-      if (!teacher) {
-        setError('Teacher account not found in this pilot workspace.')
+    setIsSigningIn(true)
+
+    try {
+      const result = await lookupEnterpriseProfile(role, normalizedEmail)
+
+      if (!result.profile) {
+        setError(`${role === 'teacher' ? 'Teacher' : 'Parent'} account not found in this pilot workspace.`)
         return
       }
 
-      setSession({ type: 'teacher', profile: teacher })
-      return
+      setDirectorySource(result.source)
+      setSession({ type: role, profile: result.profile })
+    } finally {
+      setIsSigningIn(false)
     }
+  }
 
-    const parent = enterpriseDirectory.parents.find((item) => normalizeEmail(item.email) === normalizedEmail)
-    if (!parent) {
-      setError('Parent account not found in this pilot workspace.')
-      return
-    }
+  const onTeacherProfileUpdate = (profile) => {
+    setSession((current) => {
+      if (!current || current.type !== 'teacher') {
+        return current
+      }
 
-    setSession({ type: 'parent', profile: parent })
+      return {
+        ...current,
+        profile,
+      }
+    })
   }
 
   return (
@@ -230,19 +451,33 @@ export default function EnterpriseApp() {
                   type="email"
                   value={email}
                   autoComplete="email"
+                  disabled={isSigningIn}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder={role === 'teacher' ? 'ava@springfield.edu' : 'mia.harris@example.com'}
                 />
               </div>
-              <button type="submit" className="enterprise-primary">Continue</button>
+              <button type="submit" className="enterprise-primary" disabled={isSigningIn}>
+                {isSigningIn ? 'Checking...' : 'Continue'}
+              </button>
             </form>
 
             {error && <p className="enterprise-error" role="alert">{error}</p>}
           </section>
         )}
 
+        {session && directorySource === 'fallback' && (
+          <section className="enterprise-card">
+            <span className="enterprise-badge">Using pilot fallback directory</span>
+            <p className="enterprise-note">Run the latest server/supabase.sql in your enterprise Supabase project to switch this portal to API-backed roster data.</p>
+          </section>
+        )}
+
         {session?.type === 'teacher' && (
-          <TeacherPortal teacher={session.profile} onSignOut={() => setSession(null)} />
+          <TeacherPortal
+            teacher={session.profile}
+            onSignOut={() => setSession(null)}
+            onTeacherProfileUpdate={onTeacherProfileUpdate}
+          />
         )}
 
         {session?.type === 'parent' && (

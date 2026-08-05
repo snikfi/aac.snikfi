@@ -113,6 +113,25 @@ Pilot sign-in accounts used by the enterprise route:
 
 Note: These are local pilot directory accounts in frontend code only and are not production authentication.
 
+Enterprise roster lookup also supports API-backed data:
+
+- Endpoint: `POST /api/enterprise/lookup`
+- Request: `{ "role": "teacher" | "parent", "email": "user@example.com" }`
+- Response: role profile payload consumed by the enterprise portal UI.
+
+Teacher management endpoints:
+
+- `POST /api/enterprise/classes`
+- `PATCH /api/enterprise/classes/:classId`
+- `POST /api/enterprise/classes/:classId/archive`
+- `POST /api/enterprise/pupils`
+- `PATCH /api/enterprise/pupils/:pupilId`
+- `POST /api/enterprise/pupils/:pupilId/archive`
+
+These return the updated teacher profile payload so the enterprise UI can refresh class and pupil lists immediately.
+
+To enable Supabase-backed roster data, re-run `server/supabase.sql` in your enterprise Supabase project. The SQL now creates enterprise user, class, pupil, and parent-child tables and seeds pilot data.
+
 ## Security Notes
 
 - Admin unlock verification happens on the server and returns a short-lived session token.
