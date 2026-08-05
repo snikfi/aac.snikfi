@@ -127,6 +127,7 @@ Teacher management endpoints:
 - `POST /api/enterprise/pupils`
 - `PATCH /api/enterprise/pupils/:pupilId`
 - `POST /api/enterprise/pupils/:pupilId/archive`
+- `POST /api/enterprise/pupils/:pupilId/reassign`
 - `POST /api/enterprise/pupils/:pupilId/parents`
 - `POST /api/enterprise/pupils/:pupilId/parents/remove`
 

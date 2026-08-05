@@ -192,6 +192,25 @@
   margin-top: 0.65rem;
 }
 
+.enterprise-move-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.42rem;
+  margin-top: 0.65rem;
+}
+
+.enterprise-move-row select {
+  border: 1px solid #c8bea7;
+  border-radius: 0.65rem;
+  font-size: 0.9rem;
+  padding: 0.48rem 0.62rem;
+  font-family: inherit;
+}
+
+.enterprise-move-row .enterprise-ghost {
+  margin-top: 0;
+}
+
 .enterprise-parent-chip {
   border: 1px solid #9ab8a9;
   background: #f1faf5;
@@ -298,6 +317,10 @@
   }
 
   .enterprise-parent-link-form {
+    grid-template-columns: 1fr;
+  }
+
+  .enterprise-move-row {
     grid-template-columns: 1fr;
   }
 }

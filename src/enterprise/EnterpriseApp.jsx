@@ -6,6 +6,7 @@ import {
   createEnterprisePupil,
   linkParentEmailToPupil,
   lookupEnterpriseProfile,
+  reassignEnterprisePupil,
   unlinkParentEmailFromPupil,
   updateEnterpriseClass,
   updateEnterprisePupil,
@@ -67,6 +68,7 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
   const [newPupilName, setNewPupilName] = useState('')
   const [newPupilGoal, setNewPupilGoal] = useState('')
   const [parentEmailDraftByPupilId, setParentEmailDraftByPupilId] = useState({})
+  const [moveClassDraftByPupilId, setMoveClassDraftByPupilId] = useState({})
   const [errorMessage, setErrorMessage] = useState('')
   const [busyAction, setBusyAction] = useState('')
 
@@ -268,6 +270,26 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
     await runTeacherUpdate('remove-parent-link', () => unlinkParentEmailFromPupil(pupil.id, email))
   }
 
+  const onChangeMoveClassDraft = (pupilId, classId) => {
+    setMoveClassDraftByPupilId((current) => ({
+      ...current,
+      [pupilId]: classId,
+    }))
+  }
+
+  const onReassignPupil = async (pupil) => {
+    const currentClassId = activeClass?.id || ''
+    const fallbackTarget = teacher.classes.find((item) => item.id !== currentClassId)?.id || ''
+    const targetClassId = moveClassDraftByPupilId[pupil.id] || fallbackTarget
+
+    if (!targetClassId || targetClassId === currentClassId) {
+      setErrorMessage('Choose a different class to move this pupil.')
+      return
+    }
+
+    await runTeacherUpdate('move-pupil', () => reassignEnterprisePupil(pupil.id, targetClassId))
+  }
+
   const isBusy = Boolean(busyAction)
 
   return (
@@ -356,6 +378,29 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
                 <h3>{pupil.name}</h3>
                 <span className="enterprise-badge">Goal: {pupil.communicationGoal}</span>
                 <p>Parent contacts: {pupil.parentEmails.join(', ')}</p>
+                <div className="enterprise-move-row">
+                  <select
+                    value={moveClassDraftByPupilId[pupil.id] || ''}
+                    onChange={(event) => onChangeMoveClassDraft(pupil.id, event.target.value)}
+                    disabled={isBusy}
+                    aria-label={`Move ${pupil.name} to class`}
+                  >
+                    <option value="">Move to class...</option>
+                    {teacher.classes
+                      .filter((item) => item.id !== activeClass.id)
+                      .map((item) => (
+                        <option key={`${pupil.id}-${item.id}`} value={item.id}>{item.name}</option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="enterprise-ghost"
+                    disabled={isBusy || teacher.classes.length < 2}
+                    onClick={() => onReassignPupil(pupil)}
+                  >
+                    Move pupil
+                  </button>
+                </div>
                 <div className="enterprise-parent-email-list">
                   {pupil.parentEmails.map((email) => (
                     <button

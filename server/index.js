@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import process from 'node:process'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
@@ -830,6 +831,58 @@ app.post('/api/enterprise/pupils/:pupilId/archive', async (req, res) => {
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'Failed to archive pupil' })
+  }
+})
+
+app.post('/api/enterprise/pupils/:pupilId/reassign', async (req, res) => {
+  const pupilId = normalizeText(req.params?.pupilId)
+  const targetClassId = normalizeText(req.body?.targetClassId)
+
+  if (!pupilId || !targetClassId) {
+    return res.status(400).json({ error: 'pupilId and targetClassId are required' })
+  }
+
+  try {
+    const pupil = await findPupilById(pupilId)
+    if (!pupil || pupil.archived_at) {
+      return res.status(404).json({ error: 'Pupil not found' })
+    }
+
+    const sourceClass = await findClassById(pupil.class_id)
+    if (!sourceClass || sourceClass.archived_at) {
+      return res.status(404).json({ error: 'Source class not found' })
+    }
+
+    const targetClass = await findClassById(targetClassId)
+    if (!targetClass || targetClass.archived_at) {
+      return res.status(404).json({ error: 'Target class not found' })
+    }
+
+    if (sourceClass.teacher_user_id !== targetClass.teacher_user_id) {
+      return res.status(400).json({ error: 'Pupil can only be moved within classes owned by the same teacher' })
+    }
+
+    if (pupil.class_id !== targetClassId) {
+      const { error: updateError } = await supabase
+        .from('enterprise_pupils')
+        .update({ class_id: targetClassId })
+        .eq('id', pupil.id)
+
+      if (updateError) {
+        throw updateError
+      }
+    }
+
+    const teacher = await findTeacherById(sourceClass.teacher_user_id)
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' })
+    }
+
+    const profile = await buildTeacherProfile(teacher)
+    return res.json({ ok: true, profile })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'Failed to reassign pupil' })
   }
 })
 

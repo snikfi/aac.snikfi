@@ -111,6 +111,10 @@ export async function archiveEnterprisePupil(pupilId) {
   return requestEnterprise(`/api/enterprise/pupils/${encodeURIComponent(pupilId)}/archive`, 'POST')
 }
 
+export async function reassignEnterprisePupil(pupilId, targetClassId) {
+  return requestEnterprise(`/api/enterprise/pupils/${encodeURIComponent(pupilId)}/reassign`, 'POST', { targetClassId })
+}
+
 export async function linkParentEmailToPupil(pupilId, email) {
   return requestEnterprise(`/api/enterprise/pupils/${encodeURIComponent(pupilId)}/parents`, 'POST', { email })
 }
