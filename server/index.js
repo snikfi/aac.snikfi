@@ -180,6 +180,15 @@ function createScopedId(prefix) {
   return `${safePrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function emailToDisplayName(email) {
+  const localPart = normalizeEmail(email).split('@')[0] || 'Parent User'
+  return localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ') || 'Parent User'
+}
+
 function isMissingEnterpriseTablesError(error) {
   const code = typeof error?.code === 'string' ? error.code : ''
   if (code === '42P01') {
@@ -203,6 +212,42 @@ async function findEnterpriseUserByEmail(role, email) {
   }
 
   return data || null
+}
+
+async function ensureParentUserByEmail(email) {
+  const normalizedEmail = normalizeEmail(email)
+  const existingParent = await findEnterpriseUserByEmail('parent', normalizedEmail)
+  if (existingParent) {
+    return existingParent
+  }
+
+  const parentId = createScopedId('parent')
+  const { error: insertError } = await supabase
+    .from('enterprise_users')
+    .insert({
+      id: parentId,
+      role: 'parent',
+      email: normalizedEmail,
+      full_name: emailToDisplayName(normalizedEmail),
+    })
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      const createdParent = await findEnterpriseUserByEmail('parent', normalizedEmail)
+      if (createdParent) {
+        return createdParent
+      }
+    }
+
+    throw insertError
+  }
+
+  return {
+    id: parentId,
+    role: 'parent',
+    email: normalizedEmail,
+    full_name: emailToDisplayName(normalizedEmail),
+  }
 }
 
 async function findTeacherById(teacherId) {
@@ -785,6 +830,99 @@ app.post('/api/enterprise/pupils/:pupilId/archive', async (req, res) => {
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'Failed to archive pupil' })
+  }
+})
+
+app.post('/api/enterprise/pupils/:pupilId/parents', async (req, res) => {
+  const pupilId = normalizeText(req.params?.pupilId)
+  const email = normalizeEmail(req.body?.email)
+
+  if (!pupilId || !email) {
+    return res.status(400).json({ error: 'pupilId and email are required' })
+  }
+
+  try {
+    const pupil = await findPupilById(pupilId)
+    if (!pupil || pupil.archived_at) {
+      return res.status(404).json({ error: 'Pupil not found' })
+    }
+
+    const classRoom = await findClassById(pupil.class_id)
+    if (!classRoom || classRoom.archived_at) {
+      return res.status(404).json({ error: 'Class not found' })
+    }
+
+    const parentUser = await ensureParentUserByEmail(email)
+
+    const { error: linkError } = await supabase
+      .from('enterprise_parent_child')
+      .upsert(
+        {
+          parent_user_id: parentUser.id,
+          pupil_id: pupil.id,
+        },
+        { onConflict: 'parent_user_id,pupil_id' },
+      )
+
+    if (linkError) {
+      throw linkError
+    }
+
+    const teacher = await findTeacherById(classRoom.teacher_user_id)
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' })
+    }
+
+    const profile = await buildTeacherProfile(teacher)
+    return res.json({ ok: true, profile })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'Failed to link parent email' })
+  }
+})
+
+app.post('/api/enterprise/pupils/:pupilId/parents/remove', async (req, res) => {
+  const pupilId = normalizeText(req.params?.pupilId)
+  const email = normalizeEmail(req.body?.email)
+
+  if (!pupilId || !email) {
+    return res.status(400).json({ error: 'pupilId and email are required' })
+  }
+
+  try {
+    const pupil = await findPupilById(pupilId)
+    if (!pupil || pupil.archived_at) {
+      return res.status(404).json({ error: 'Pupil not found' })
+    }
+
+    const classRoom = await findClassById(pupil.class_id)
+    if (!classRoom || classRoom.archived_at) {
+      return res.status(404).json({ error: 'Class not found' })
+    }
+
+    const parentUser = await findEnterpriseUserByEmail('parent', email)
+    if (parentUser) {
+      const { error: unlinkError } = await supabase
+        .from('enterprise_parent_child')
+        .delete()
+        .eq('parent_user_id', parentUser.id)
+        .eq('pupil_id', pupil.id)
+
+      if (unlinkError) {
+        throw unlinkError
+      }
+    }
+
+    const teacher = await findTeacherById(classRoom.teacher_user_id)
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' })
+    }
+
+    const profile = await buildTeacherProfile(teacher)
+    return res.json({ ok: true, profile })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'Failed to unlink parent email' })
   }
 })
 

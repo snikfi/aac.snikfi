@@ -110,3 +110,11 @@ export async function updateEnterprisePupil(pupilId, { name, communicationGoal }
 export async function archiveEnterprisePupil(pupilId) {
   return requestEnterprise(`/api/enterprise/pupils/${encodeURIComponent(pupilId)}/archive`, 'POST')
 }
+
+export async function linkParentEmailToPupil(pupilId, email) {
+  return requestEnterprise(`/api/enterprise/pupils/${encodeURIComponent(pupilId)}/parents`, 'POST', { email })
+}
+
+export async function unlinkParentEmailFromPupil(pupilId, email) {
+  return requestEnterprise(`/api/enterprise/pupils/${encodeURIComponent(pupilId)}/parents/remove`, 'POST', { email })
+}

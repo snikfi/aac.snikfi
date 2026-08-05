@@ -4,7 +4,9 @@ import {
   archiveEnterprisePupil,
   createEnterpriseClass,
   createEnterprisePupil,
+  linkParentEmailToPupil,
   lookupEnterpriseProfile,
+  unlinkParentEmailFromPupil,
   updateEnterpriseClass,
   updateEnterprisePupil,
 } from '../lib/enterpriseDirectorySync'
@@ -21,8 +23,14 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
   const [newClassGrade, setNewClassGrade] = useState('')
   const [newPupilName, setNewPupilName] = useState('')
   const [newPupilGoal, setNewPupilGoal] = useState('')
+  const [parentEmailDraftByPupilId, setParentEmailDraftByPupilId] = useState({})
   const [errorMessage, setErrorMessage] = useState('')
   const [busyAction, setBusyAction] = useState('')
+
+  const activeClass = useMemo(
+    () => teacher.classes.find((room) => room.id === activeClassId) || null,
+    [activeClassId, teacher.classes],
+  )
 
   useEffect(() => {
     if (!teacher.classes.length) {
@@ -38,10 +46,16 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
     }
   }, [activeClassId, teacher.classes])
 
-  const activeClass = useMemo(
-    () => teacher.classes.find((room) => room.id === activeClassId) || null,
-    [activeClassId, teacher.classes],
-  )
+  useEffect(() => {
+    if (!selectedPupilId || !activeClass) {
+      return
+    }
+
+    const stillExists = activeClass.pupils.some((item) => item.id === selectedPupilId)
+    if (!stillExists) {
+      setSelectedPupilId('')
+    }
+  }, [activeClass, selectedPupilId])
 
   const selectedPupil = useMemo(() => {
     if (!activeClass) {
@@ -182,6 +196,35 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
     await runTeacherUpdate('archive-pupil', () => archiveEnterprisePupil(pupil.id))
   }
 
+  const onChangeParentDraft = (pupilId, value) => {
+    setParentEmailDraftByPupilId((current) => ({
+      ...current,
+      [pupilId]: value,
+    }))
+  }
+
+  const onAddParentEmail = async (event, pupil) => {
+    event.preventDefault()
+    const rawEmail = parentEmailDraftByPupilId[pupil.id] || ''
+    const email = rawEmail.trim().toLowerCase()
+
+    if (!email) {
+      setErrorMessage('Enter a parent email before adding.')
+      return
+    }
+
+    await runTeacherUpdate('add-parent-link', () => linkParentEmailToPupil(pupil.id, email))
+
+    setParentEmailDraftByPupilId((current) => ({
+      ...current,
+      [pupil.id]: '',
+    }))
+  }
+
+  const onRemoveParentEmail = async (pupil, email) => {
+    await runTeacherUpdate('remove-parent-link', () => unlinkParentEmailFromPupil(pupil.id, email))
+  }
+
   const isBusy = Boolean(busyAction)
 
   return (
@@ -270,6 +313,30 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
                 <h3>{pupil.name}</h3>
                 <span className="enterprise-badge">Goal: {pupil.communicationGoal}</span>
                 <p>Parent contacts: {pupil.parentEmails.join(', ')}</p>
+                <div className="enterprise-parent-email-list">
+                  {pupil.parentEmails.map((email) => (
+                    <button
+                      key={`${pupil.id}-${email}`}
+                      type="button"
+                      className="enterprise-parent-chip"
+                      disabled={isBusy}
+                      onClick={() => onRemoveParentEmail(pupil, email)}
+                      title="Remove parent link"
+                    >
+                      {email} ×
+                    </button>
+                  ))}
+                </div>
+                <form className="enterprise-parent-link-form" onSubmit={(event) => onAddParentEmail(event, pupil)}>
+                  <input
+                    type="email"
+                    placeholder="Add parent email"
+                    value={parentEmailDraftByPupilId[pupil.id] || ''}
+                    onChange={(event) => onChangeParentDraft(pupil.id, event.target.value)}
+                    disabled={isBusy}
+                  />
+                  <button type="submit" className="enterprise-ghost" disabled={isBusy}>Add parent</button>
+                </form>
                 <div className="enterprise-actions-row">
                   <button
                     type="button"
