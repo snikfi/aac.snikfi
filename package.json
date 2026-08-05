@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "api:start": "npm --prefix server start"
+    "api:start": "npm --prefix server start",
+    "env:main": "node scripts/use-env.mjs main",
+    "env:enterprise": "node scripts/use-env.mjs enterprise"
   },
   "dependencies": {
     "react": "^19.2.7",

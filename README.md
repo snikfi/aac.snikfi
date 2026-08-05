@@ -65,6 +65,40 @@ ARTI_ADMIN_LOCKOUT_MINUTES=15
 npm run dev
 ```
 
+### Branch-Safe Env Workflow (Main vs Enterprise)
+
+To avoid env collisions when switching branches, keep two local env profiles per app layer:
+
+- Frontend profiles (repo root):
+	- `.env.local.main`
+	- `.env.local.enterprise`
+- API profiles (`server/`):
+	- `server/.env.main`
+	- `server/.env.enterprise`
+
+These files stay local (not committed). Then switch active env files with:
+
+```bash
+npm run env:main
+```
+
+or
+
+```bash
+npm run env:enterprise
+```
+
+Each command copies:
+
+- `.env.local.<profile>` -> `.env.local`
+- `server/.env.<profile>` -> `server/.env`
+
+Recommended routine after changing branches:
+
+1. Run the matching env switch command.
+2. Restart API (`npm --prefix server start`).
+3. Restart frontend (`npm run dev`).
+
 ## Production Setup (Single User)
 
 Deploy two services:
