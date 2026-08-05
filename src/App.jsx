@@ -2809,12 +2809,13 @@ function App() {
         .filter(({ item }) => item.label.toLowerCase().includes(normalizedAdminSearch))
     : adminTiles.map((item, sourceIndex) => ({ item, sourceIndex }))
 
-  const mobileStepClass = !subject ? 'step-subject' : !verb ? 'step-verb' : 'step-object'
+  const hasObjectOptions = objectOptions.length > 0
+  const mobileStepClass = !subject ? 'step-subject' : !verb || !hasObjectOptions ? 'step-verb' : 'step-object'
   const boardModeClass = isThreeStepMode ? mobileStepClass : 'mode-free'
   const shellModeClass = isThreeStepMode ? 'mode-three-step' : 'mode-free'
   const isMobileFreeModeLayout = !isThreeStepMode && isMobileViewport
   const isVerbColumnActive = !isThreeStepMode || Boolean(subject)
-  const isObjectColumnActive = !isThreeStepMode || Boolean(verb)
+  const isObjectColumnActive = !isThreeStepMode || Boolean(verb && hasObjectOptions)
   const showViewportDebugBadge = import.meta.env.DEV
   const debugViewportLabel = showViewportDebugBadge
     ? [
