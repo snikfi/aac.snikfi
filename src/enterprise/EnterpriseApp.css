@@ -1,0 +1,212 @@
+:root {
+  --enterprise-ink: #0f2138;
+  --enterprise-accent: #126e5a;
+  --enterprise-accent-soft: #d9f3ec;
+  --enterprise-paper: #f7f4ec;
+  --enterprise-card: #fffef9;
+  --enterprise-line: #d9d2bf;
+  --enterprise-warning: #8b2f2f;
+}
+
+.enterprise-shell {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 85% 5%, #f4d6ab 0%, rgba(244, 214, 171, 0.1) 32%),
+    linear-gradient(180deg, #f3efe4 0%, var(--enterprise-paper) 45%, #ece8dc 100%);
+  color: var(--enterprise-ink);
+  padding: 2rem clamp(1rem, 2.2vw, 2.5rem) 3rem;
+}
+
+.enterprise-header {
+  max-width: 72rem;
+  margin: 0 auto 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.enterprise-eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: #325471;
+}
+
+.enterprise-header h1 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
+  line-height: 1.08;
+}
+
+.enterprise-subline {
+  margin: 0.4rem 0 0;
+  color: #415f78;
+}
+
+.enterprise-back-link {
+  border: 1px solid var(--enterprise-line);
+  background: #fefcf5;
+  color: #173554;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+
+.enterprise-container {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.enterprise-card {
+  background: var(--enterprise-card);
+  border: 1px solid var(--enterprise-line);
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(18, 31, 46, 0.05);
+  padding: clamp(1rem, 2.2vw, 1.5rem);
+}
+
+.enterprise-login-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.enterprise-pill {
+  border: 1px solid var(--enterprise-line);
+  border-radius: 999px;
+  background: #f6f0df;
+  color: #284460;
+  font-weight: 700;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+}
+
+.enterprise-pill.active {
+  background: #184f86;
+  color: #fff;
+  border-color: #184f86;
+}
+
+.enterprise-field {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.95rem;
+}
+
+.enterprise-field label {
+  font-weight: 700;
+  color: #1f405e;
+}
+
+.enterprise-field input {
+  border: 1px solid #c8bea7;
+  border-radius: 0.7rem;
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
+  font-family: inherit;
+}
+
+.enterprise-primary {
+  border: 0;
+  border-radius: 0.8rem;
+  background: var(--enterprise-accent);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.7rem 0.95rem;
+  cursor: pointer;
+}
+
+.enterprise-primary:hover {
+  filter: brightness(1.06);
+}
+
+.enterprise-error {
+  margin: 0;
+  color: var(--enterprise-warning);
+  font-weight: 700;
+}
+
+.enterprise-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
+}
+
+.enterprise-item {
+  border: 1px solid var(--enterprise-line);
+  border-radius: 0.85rem;
+  background: #fffef8;
+  padding: 0.85rem;
+}
+
+.enterprise-item h3 {
+  margin: 0;
+  font-size: 1.06rem;
+}
+
+.enterprise-item p {
+  margin: 0.45rem 0 0;
+  color: #38556f;
+}
+
+.enterprise-ghost {
+  margin-top: 0.8rem;
+  border: 1px solid #7ea18f;
+  border-radius: 0.7rem;
+  background: #edf8f3;
+  color: #164d3d;
+  font-weight: 700;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+
+.enterprise-toolbar {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.enterprise-badge {
+  display: inline-block;
+  background: var(--enterprise-accent-soft);
+  color: #0e4c3e;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  padding: 0.24rem 0.65rem;
+  font-weight: 700;
+}
+
+.enterprise-link {
+  display: inline-block;
+  margin-top: 0.7rem;
+  color: #164f86;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.enterprise-link:hover {
+  text-decoration: underline;
+}
+
+.enterprise-note {
+  margin: 0.2rem 0 0;
+  color: #3f5c74;
+}
+
+@media (max-width: 780px) {
+  .enterprise-shell {
+    padding: 1rem 0.8rem 2rem;
+  }
+
+  .enterprise-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

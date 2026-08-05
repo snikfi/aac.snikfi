@@ -7,6 +7,8 @@ Arti is a React + Vite communication board that supports:
 - Admin tile management (add/edit/reorder/delete)
 - Cross-device tile persistence through a sync API
 
+Arti now also includes an isolated enterprise pilot portal route with role-based flows for teachers and parents.
+
 ## Project Structure
 
 - `src/`: Frontend app
@@ -93,6 +95,23 @@ Required frontend environment variables:
 - On launch, app fetches cloud config from sync API.
 - Any tile change is saved to localStorage and then pushed to sync API.
 - Opening the same app URL on another device loads the same shared config.
+
+## Enterprise Pilot Portal
+
+- Route: `/enterprise`
+- Purpose: Keep teacher/parent portal development isolated from the original AAC dashboard.
+- Teacher flow: Sign in -> class list -> pupil list -> pupil profile dashboard.
+- Parent flow:
+	- Single child: direct child communication dashboard.
+	- Multiple children: child selection page before dashboard.
+
+Pilot sign-in accounts used by the enterprise route:
+
+- Teacher: `ava@springfield.edu`
+- Parent with multiple children: `mia.harris@example.com`
+- Parent with one child: `oscar.cole@example.com`
+
+Note: These are local pilot directory accounts in frontend code only and are not production authentication.
 
 ## Security Notes
 

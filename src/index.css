@@ -21,6 +21,13 @@ body {
   overflow: hidden;
 }
 
+body.enterprise-mode {
+  min-height: 100dvh;
+  height: auto;
+  overflow: auto;
+  background: #f7f4ec;
+}
+
 #root {
   height: 100%;
 }
