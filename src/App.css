@@ -115,6 +115,28 @@
   align-items: center;
 }
 
+.pupil-launch-context {
+  margin-top: -0.25rem;
+  border: 0.0625rem solid #73b39f;
+  border-radius: 0.75rem;
+  background: #edf9f3;
+  color: #11493b;
+  padding: 0.5rem 0.75rem;
+}
+
+.pupil-launch-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.pupil-launch-meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #245f50;
+}
+
 .sync-chip {
   margin: 0;
   min-width: 9.375rem;
@@ -2362,6 +2384,10 @@ button:focus-visible {
 
   .top-strip {
     flex-wrap: wrap;
+  }
+
+  .pupil-launch-context {
+    margin-top: -0.15rem;
   }
 
   .top-left-group {

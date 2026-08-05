@@ -502,6 +502,28 @@ function formatBackupTimestamp() {
 
 function App() {
   const initialConfig = useMemo(() => loadTileConfig(), [])
+  const pupilLaunchContext = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+
+    const search = new URLSearchParams(window.location.search)
+    const pupilName = (search.get('pupilName') || '').trim()
+
+    if (!pupilName) {
+      return null
+    }
+
+    return {
+      pupilId: (search.get('pupilId') || '').trim(),
+      pupilName,
+      goal: (search.get('goal') || '').trim(),
+      className: (search.get('className') || '').trim(),
+      teacherName: (search.get('teacherName') || '').trim(),
+      viewerRole: (search.get('viewerRole') || '').trim(),
+      viewerName: (search.get('viewerName') || '').trim(),
+    }
+  }, [])
 
   const [subjects, setSubjects] = useState(initialConfig.subjects)
   const [verbs, setVerbs] = useState(initialConfig.verbs)
@@ -3143,6 +3165,21 @@ function App() {
           </button>
         </div>
       </header>
+      {pupilLaunchContext && (
+        <section className="pupil-launch-context" aria-label="Session context">
+          <p className="pupil-launch-title">Communication session: {pupilLaunchContext.pupilName}</p>
+          <p className="pupil-launch-meta">
+            {pupilLaunchContext.className ? `Class ${pupilLaunchContext.className}` : 'Class not set'}
+            {pupilLaunchContext.teacherName ? ` • Teacher ${pupilLaunchContext.teacherName}` : ''}
+            {pupilLaunchContext.goal ? ` • Goal ${pupilLaunchContext.goal}` : ''}
+          </p>
+          {pupilLaunchContext.viewerRole && pupilLaunchContext.viewerName && (
+            <p className="pupil-launch-meta">
+              Opened by {pupilLaunchContext.viewerRole} {pupilLaunchContext.viewerName}
+            </p>
+          )}
+        </section>
+      )}
 
       {isMobileFreeModeLayout ? (
         <>

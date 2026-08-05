@@ -16,6 +16,49 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase()
 }
 
+function buildBoardLaunchHref({
+  pupilId,
+  pupilName,
+  communicationGoal,
+  className,
+  teacherName,
+  viewerRole,
+  viewerName,
+}) {
+  const search = new URLSearchParams()
+
+  if (pupilId) {
+    search.set('pupilId', pupilId)
+  }
+
+  if (pupilName) {
+    search.set('pupilName', pupilName)
+  }
+
+  if (communicationGoal) {
+    search.set('goal', communicationGoal)
+  }
+
+  if (className) {
+    search.set('className', className)
+  }
+
+  if (teacherName) {
+    search.set('teacherName', teacherName)
+  }
+
+  if (viewerRole) {
+    search.set('viewerRole', viewerRole)
+  }
+
+  if (viewerName) {
+    search.set('viewerName', viewerName)
+  }
+
+  const query = search.toString()
+  return query ? `/?${query}` : '/'
+}
+
 function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
   const [activeClassId, setActiveClassId] = useState(teacher.classes[0]?.id || '')
   const [selectedPupilId, setSelectedPupilId] = useState('')
@@ -360,7 +403,22 @@ function TeacherPortal({ teacher, onSignOut, onTeacherProfileUpdate }) {
         <section className="enterprise-card">
           <h2>{selectedPupil.name} Dashboard</h2>
           <p className="enterprise-note">{selectedPupil.communicationGoal}</p>
-          <a className="enterprise-link" href="/" target="_blank" rel="noreferrer">Open communication board in new tab</a>
+          <a
+            className="enterprise-link"
+            href={buildBoardLaunchHref({
+              pupilId: selectedPupil.id,
+              pupilName: selectedPupil.name,
+              communicationGoal: selectedPupil.communicationGoal,
+              className: activeClass?.name || '',
+              teacherName: teacher.name,
+              viewerRole: 'teacher',
+              viewerName: teacher.name,
+            })}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open communication board in new tab
+          </a>
         </section>
       )}
     </>
@@ -414,7 +472,22 @@ function ParentPortal({ parent, onSignOut }) {
           <span className="enterprise-badge">Goal: {selectedChild.communicationGoal}</span>
           <p className="enterprise-note">Class: {selectedChild.className}</p>
           <p className="enterprise-note">Teacher: {selectedChild.teacherName}</p>
-          <a className="enterprise-link" href="/" target="_blank" rel="noreferrer">Open communication board in new tab</a>
+          <a
+            className="enterprise-link"
+            href={buildBoardLaunchHref({
+              pupilId: selectedChild.id,
+              pupilName: selectedChild.name,
+              communicationGoal: selectedChild.communicationGoal,
+              className: selectedChild.className,
+              teacherName: selectedChild.teacherName,
+              viewerRole: 'parent',
+              viewerName: parent.name,
+            })}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open communication board in new tab
+          </a>
         </section>
       )}
     </>
